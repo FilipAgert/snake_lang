@@ -1,4 +1,4 @@
-use crate::lexer::token::{Keyword, Operator, Symbol, Token};
+use crate::lexer::token::{Keyword, Operator, Symbol, Token, TokenType};
 
 pub fn scan(s: &str) -> Vec<Token> {
     let tokens = Vec::new();
@@ -15,7 +15,7 @@ mod tests {
     fn test_scan_operators() {
         let input = "+ =";
         let result = scan(input);
-        assert_eq!(result[0], Token::Op(Operator::Plus));
-        assert_eq!(result[1], Token::Op(Operator::Equal));
+        assert_eq!(result[0].token_type, TokenType::Op(Operator::Plus));
+        assert_eq!(result[1].token_type, TokenType::Op(Operator::Equal));
     }
 }

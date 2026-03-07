@@ -1,5 +1,12 @@
 #[derive(Debug, PartialEq)]
-pub enum Token {
+pub struct Token {
+    pub token_type: TokenType,
+    pub line: u32,
+    pub col: u8,
+    pub len: u8,
+}
+#[derive(Debug, PartialEq)]
+pub enum TokenType {
     Keyword(Keyword),
     Identifier(String),
     Op(Operator),
