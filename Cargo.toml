@@ -1,0 +1,20 @@
+[package]
+name = "c_compiler"
+version = "0.1.0"
+edition = "2024"
+authors = ["Filip Agert filip.agert@gmail.com"]
+description = "Basic c_compiler written in rust"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"
+
+[profile.test]
+opt-level = 1
+
+[dependencies]
