@@ -15,6 +15,6 @@ lto = true
 panic = "abort"
 
 [profile.test]
-opt-level = 1
-
+opt-level = 0
+debug = true
 [dependencies]
