@@ -22,7 +22,7 @@ pub enum TokenType {
     Identifier(String),
     Op(Operator),
     Integer(i64),
-    Bracket(Bracket),
+    Symbol(Symbol),
     EOF,
 }
 
@@ -33,8 +33,8 @@ impl TokenType {
             if let Some(op) = Operator::from_ch(ch) {
                 return TokenType::Op(op);
             }
-            if let Some(bracket) = Bracket::from_ch(ch) {
-                return TokenType::Bracket(bracket);
+            if let Some(symbol) = Symbol::from_ch(ch) {
+                return TokenType::Symbol(symbol);
             }
         }
         if let Some(keyword) = Keyword::from_str(str) {
@@ -68,10 +68,27 @@ impl Operator {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum Symbol {
+    Bracket(Bracket),
+    Semicolon,
+}
+#[derive(Debug, PartialEq)]
 pub enum Bracket {
     Parenthesis(Side),
     Square(Side),
     CurlyBrace(Side),
+}
+impl Symbol {
+    pub fn from_ch(c: char) -> Option<Symbol> {
+        if let Some(b) = Bracket::from_ch(c) {
+            return Some(Symbol::Bracket(b));
+        }
+
+        match c {
+            ';' => Some(Symbol::Semicolon),
+            _ => None,
+        }
+    }
 }
 impl Bracket {
     pub fn from_ch(c: char) -> Option<Bracket> {

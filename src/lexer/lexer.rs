@@ -80,7 +80,7 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lexer::token::{Operator, Token};
+    use crate::lexer::token::{Bracket, Keyword, Operator, Side, Symbol, Token};
 
     #[test]
     fn test_sep_strings() {
@@ -106,9 +106,32 @@ mod tests {
 
     #[test]
     fn test_scan() {
-        let input = "+ =";
+        let input = "int val = 4;\nint x = f(4);";
         let result = scan(input);
-        assert_eq!(result[0].token_type, TokenType::Op(Operator::Plus));
-        assert_eq!(result[1].token_type, TokenType::Op(Operator::Equal));
+        assert_eq!(result[0].token_type, TokenType::Keyword(Keyword::Int));
+        assert_eq!(
+            result[1].token_type,
+            TokenType::Identifier("val".to_string())
+        );
+        assert_eq!(result[2].token_type, TokenType::Op(Operator::Equal));
+        assert_eq!(result[3].token_type, TokenType::Integer(4));
+        assert_eq!(result[4].token_type, TokenType::Symbol(Symbol::Semicolon));
+        assert_eq!(result[5].token_type, TokenType::Keyword(Keyword::Int));
+        assert_eq!(result[6].token_type, TokenType::Identifier("x".to_string()));
+        assert_eq!(result[7].token_type, TokenType::Op(Operator::Equal));
+        assert_eq!(result[8].token_type, TokenType::Identifier("f".to_string()));
+        assert_eq!(
+            result[9].token_type,
+            TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)))
+        );
+        assert_eq!(result[10].token_type, TokenType::Integer(4));
+        assert_eq!(
+            result[11].token_type,
+            TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right)))
+        );
+        assert_eq!(result[12].token_type, TokenType::Symbol(Symbol::Semicolon));
+        for res in result {
+            println!("{:?}", res)
+        }
     }
 }
