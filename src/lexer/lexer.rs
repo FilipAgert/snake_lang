@@ -1,7 +1,6 @@
 use crate::lexer::token::{Token, TokenType};
 use std::iter::Peekable;
 use std::mem;
-use std::str::Chars;
 use std::string::String;
 
 #[derive(Debug)]
@@ -17,7 +16,6 @@ impl TokenStr {
 }
 
 const SPECIAL_SYMBOLS: &'static str = "()[]{};=+-/*";
-const IGNORE_CHARACTERS: &'static str = "\n\r";
 
 pub fn scan(str: &str) -> Vec<Token> {
     let token_str = seperate_string(str);
