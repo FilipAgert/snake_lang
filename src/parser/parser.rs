@@ -124,7 +124,7 @@ fn parse_expression(
             }
 
             tokens.next();
-            let right = parse_expression(tokens, precedence)?;
+            let right = parse_expression(tokens, precedence + 1)?;
 
             left = Expression::BinOp(BinaryExpression {
                 op: op.clone(),
@@ -148,7 +148,7 @@ mod tests {
     use crate::parser::parser::*;
 
     #[test]
-    fn test_sep_strings() {
+    fn test_build_expression_1() {
         let input = "15*x+3";
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
@@ -168,7 +168,7 @@ mod tests {
                     Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(15)))
                 );
                 assert_eq!(
-                    *binop_inner.left,
+                    *binop_inner.right,
                     Expression::ValueExpression(ValueExpression::Identifier("x".to_string()))
                 );
                 assert_eq!(binop_inner.op, Operator::Times);
@@ -177,6 +177,124 @@ mod tests {
             }
         } else {
             panic!("Expected binary expression here.")
+        }
+    }
+    #[test]
+    fn test_parenthesis_precedence() {
+        // (5 + 3) should be evaluated first, making it a child of '*'
+        let input = "10*(5+3)";
+        let mut tokens = scan(input);
+        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+
+        if let Expression::BinOp(root) = expression {
+            assert_eq!(root.op, Operator::Times);
+            assert_eq!(
+                *root.left,
+                Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(10)))
+            );
+
+            // Right side should be the result of the parenthesis: (5 + 3)
+            if let Expression::BinOp(inner) = *root.right {
+                assert_eq!(inner.op, Operator::Plus);
+                assert_eq!(
+                    *inner.left,
+                    Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(5)))
+                );
+                assert_eq!(
+                    *inner.right,
+                    Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(3)))
+                );
+            } else {
+                panic!("Expected nested BinOp from parenthesis");
+            }
+        } else {
+            panic!("Expected root multiplication");
+        }
+    }
+
+    #[test]
+    fn test_long_expression_chain() {
+        // 1 + 2 * 3 + 4 should result in ((1 + (2 * 3)) + 4)
+        let input = "1+2*3+4";
+        let mut tokens = scan(input);
+        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+
+        if let Expression::BinOp(root) = expression {
+            assert_eq!(root.op, Operator::Plus);
+            // Right side is the final + 4
+            assert_eq!(
+                *root.right,
+                Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(4)))
+            );
+
+            // Left side is (1 + (2 * 3))
+            if let Expression::BinOp(middle) = *root.left {
+                assert_eq!(middle.op, Operator::Plus);
+                // Verify the multiplication is nested inside this right branch
+                assert_eq!(
+                    *middle.left,
+                    Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(1)))
+                );
+                assert!(matches!(*middle.right, Expression::BinOp(_)));
+            } else {
+                panic!("Should be a binop")
+            }
+        } else {
+            panic!("Should be a binop");
+        }
+    }
+
+    #[test]
+    fn test_function_call_in_expression() {
+        // Testing: my_func(a, b) * 2
+        // Note: parse_argument_list must be implemented for this to pass
+        let input = "my_func(a, b) * 2";
+        let mut tokens = scan(input);
+        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+
+        if let Expression::BinOp(root) = expression {
+            assert_eq!(root.op, Operator::Times);
+            assert!(matches!(
+                *root.left,
+                Expression::ValueExpression(ValueExpression::CallExpression(_))
+            ));
+            assert_eq!(
+                *root.right,
+                Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(2)))
+            );
+        } else {
+            panic!("should be a binary expression")
+        }
+    }
+
+    #[test]
+    fn test_deeply_nested_parentheses() {
+        let input = "(((10)))";
+        let mut tokens = scan(input);
+        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+
+        assert_eq!(
+            expression,
+            Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(10)))
+        );
+    }
+
+    #[test]
+    fn test_operator_precedence_descending() {
+        // 10 / 2 - 1 should be ((10 / 2) - 1)
+        let input = "10/2-1";
+        let mut tokens = scan(input);
+        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+
+        if let Expression::BinOp(root) = expression {
+            assert_eq!(root.op, Operator::Minus);
+            if let Expression::BinOp(left_branch) = *root.left {
+                assert_eq!(left_branch.op, Operator::Divide);
+            } else {
+                panic!("Division should be on the left branch");
+            }
+        } else {
+            panic!("Should be a binary expression")
         }
     }
 }

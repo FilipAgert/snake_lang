@@ -88,10 +88,10 @@ impl Operator {
 
     pub fn precedence_value(self: &Self) -> i32 {
         match &self {
-            Operator::Times => 2,
-            Operator::Divide => 2,
-            Operator::Minus => 1,
-            Operator::Plus => 1,
+            Operator::Times => 20,
+            Operator::Divide => 20,
+            Operator::Minus => 10,
+            Operator::Plus => 10,
             Operator::Equal => 0,
         }
     }
