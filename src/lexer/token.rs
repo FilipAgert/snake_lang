@@ -62,6 +62,12 @@ impl TokenType {
 }
 #[derive(Debug, PartialEq)]
 pub enum Keyword {
+    Declaration(DeclarationKeyword),
+    FunctionDeclaration,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum DeclarationKeyword {
     Int,
 }
 
@@ -143,8 +149,20 @@ pub enum Side {
 
 impl Keyword {
     pub fn from_str(s: &str) -> Option<Keyword> {
+        if let Some(decl_key) = DeclarationKeyword::from_str(s) {
+            return Some(Keyword::Declaration(decl_key));
+        }
         match s {
-            "int" => Some(Keyword::Int),
+            "fn" => Some(Keyword::FunctionDeclaration),
+            _ => None,
+        }
+    }
+}
+
+impl DeclarationKeyword {
+    pub fn from_str(s: &str) -> Option<DeclarationKeyword> {
+        match s {
+            "int" => Some(DeclarationKeyword::Int),
             _ => None,
         }
     }

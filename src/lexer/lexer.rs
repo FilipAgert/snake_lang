@@ -78,7 +78,9 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lexer::token::{Bracket, Keyword, Literal, Operator, Side, Symbol};
+    use crate::lexer::token::{
+        Bracket, DeclarationKeyword, Keyword, Literal, Operator, Side, Symbol,
+    };
 
     #[test]
     fn test_sep_strings() {
@@ -106,7 +108,10 @@ mod tests {
     fn test_scan() {
         let input = "int val = 4;\nint x = f(4);";
         let result = scan(input);
-        assert_eq!(result[0].token_type, TokenType::Keyword(Keyword::Int));
+        assert_eq!(
+            result[0].token_type,
+            TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Int))
+        );
         assert_eq!(
             result[1].token_type,
             TokenType::Identifier("val".to_string())
@@ -117,7 +122,10 @@ mod tests {
             TokenType::Literal(Literal::Integer(4))
         );
         assert_eq!(result[4].token_type, TokenType::Symbol(Symbol::Semicolon));
-        assert_eq!(result[5].token_type, TokenType::Keyword(Keyword::Int));
+        assert_eq!(
+            result[5].token_type,
+            TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Int))
+        );
         assert_eq!(result[6].token_type, TokenType::Identifier("x".to_string()));
         assert_eq!(result[7].token_type, TokenType::Op(Operator::Equal));
         assert_eq!(result[8].token_type, TokenType::Identifier("f".to_string()));
