@@ -67,8 +67,11 @@ pub enum Keyword {
 
 #[derive(Debug, PartialEq)]
 pub enum Operator {
-    Plus,  // +
-    Equal, // =
+    Plus,   // +
+    Equal,  // =
+    Times,  // *
+    Divide, // /
+    Minus,  // -
 }
 
 impl Operator {
@@ -76,7 +79,20 @@ impl Operator {
         match c {
             '=' => Some(Operator::Equal),
             '+' => Some(Operator::Plus),
+            '/' => Some(Operator::Divide),
+            '-' => Some(Operator::Minus),
+            '*' => Some(Operator::Times),
             _ => None,
+        }
+    }
+
+    pub fn precedence_value(self: &Self) -> i32 {
+        match &self {
+            Operator::Times => 2,
+            Operator::Divide => 2,
+            Operator::Minus => 1,
+            Operator::Plus => 1,
+            Operator::Equal => 0,
         }
     }
 }
