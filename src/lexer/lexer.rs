@@ -1,4 +1,4 @@
-use crate::lexer::token::{Token, TokenType};
+use crate::lexer::token::{Span, Token, TokenType};
 use std::iter::Peekable;
 use std::mem;
 use std::string::String;
@@ -6,12 +6,11 @@ use std::string::String;
 #[derive(Debug)]
 struct TokenStr {
     string: String,
-    line: u32,
-    col: u32,
+    span: Span,
 }
 impl TokenStr {
-    fn new(string: String, line: u32, col: u32) -> Self {
-        TokenStr { string, line, col }
+    fn new(string: String, span: Span) -> Self {
+        TokenStr { string, span }
     }
 }
 
@@ -24,13 +23,7 @@ pub fn scan(str: &str) -> Vec<Token> {
         let t_type = TokenType::from_str(&t_str.string);
         let token = Token {
             token_type: t_type,
-            line: t_str.line,
-            col: t_str.col,
-            len: t_str
-                .string
-                .len()
-                .try_into()
-                .expect("Should work to convert usize into u32"),
+            span: t_str.span,
         };
         tokens.push(token);
     }
@@ -38,38 +31,50 @@ pub fn scan(str: &str) -> Vec<Token> {
 }
 
 fn seperate_string(str: &str) -> Vec<TokenStr> {
-    let mut cursor = str.chars().peekable();
+    let mut cursor = str.char_indices().peekable();
     let mut strings: Vec<TokenStr> = Vec::new();
     let mut curr_str: String = String::new();
-    let mut line_ctr = 0;
-    let mut col_ctr = 0;
-    let mut start_col = 0;
+    let mut curr_start = 0;
 
-    while let Some(c) = cursor.next() {
-        col_ctr += 1;
+    while let Some((idx, c)) = cursor.next() {
         if c == '\n' {
-            line_ctr += 1;
-            col_ctr = 0;
             continue;
         }
 
         if (c == ' ' || c == '\n') && !curr_str.is_empty() {
-            let str_token = TokenStr::new(mem::take(&mut curr_str), line_ctr, start_col);
+            let span = Span {
+                start: curr_start,
+                end: idx,
+            };
+            let str_token = TokenStr::new(mem::take(&mut curr_str), span);
             strings.push(str_token);
-            start_col = col_ctr;
+            curr_start = idx;
         } else if SPECIAL_SYMBOLS.contains(c) {
             if !curr_str.is_empty() {
-                let str_token = TokenStr::new(mem::take(&mut curr_str), line_ctr, start_col);
+                let span = Span {
+                    start: curr_start,
+                    end: idx,
+                };
+                let str_token = TokenStr::new(mem::take(&mut curr_str), span);
+                curr_start = idx;
                 strings.push(str_token);
             }
-            strings.push(TokenStr::new(c.to_string(), line_ctr, col_ctr));
-            start_col = col_ctr;
+            let spec_char_span = Span {
+                start: idx,
+                end: idx + 1,
+            };
+            strings.push(TokenStr::new(c.to_string(), spec_char_span));
+            curr_start = idx + 1;
         } else if c != ' ' {
             curr_str.push(c);
         }
     }
     if !curr_str.is_empty() {
-        strings.push(TokenStr::new(curr_str, line_ctr, start_col));
+        let span = Span {
+            start: curr_start,
+            end: str.len(),
+        };
+        strings.push(TokenStr::new(curr_str, span));
     }
 
     strings

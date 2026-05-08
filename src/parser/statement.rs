@@ -4,7 +4,7 @@ use std::iter::Peekable;
 use std::slice::Iter;
 #[derive(Debug, Clone)]
 
-enum Statement {
+pub enum Statement {
     Root {
         statements: Vec<Statement>,
     },
@@ -25,7 +25,7 @@ enum Statement {
 }
 
 #[derive(Debug, Clone)]
-struct Declaration {
+pub struct Declaration {
     identifier: String,
     keyword: DeclarationKeyword,
 }
