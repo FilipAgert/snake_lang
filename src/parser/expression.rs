@@ -10,38 +10,25 @@ use std::slice::Iter;
 pub enum ValueExpression {
     Literal(Literal),
     Identifier(String),
-    CallExpression(CallExpression),
+    CallExpression {
+        id: String,
+        arguments: Vec<Expression>,
+    },
 }
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     // an expression is something which returns a value. It is NOT a statement.
     // An assignment, for example, is a binary statement which assigns a variable to the result of an expression.
     ValueExpression(ValueExpression), // Literal or a variable.
-    BinOp(BinaryExpression),          // A binary operation.
-    UnOp(UnaryExpression),
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct CallExpression {
-    identifier: String,
-    arguments: Vec<Expression>,
-}
-#[derive(Debug, PartialEq, Clone)]
-pub struct BinaryExpression {
-    pub op: Operator,
-    pub left: Box<Expression>,
-    pub right: Box<Expression>,
-}
-
-impl From<BinaryExpression> for Expression {
-    fn from(binop: BinaryExpression) -> Self {
-        Expression::BinOp(binop)
-    }
-}
-#[derive(Debug, PartialEq, Clone)]
-pub struct UnaryExpression {
-    op: Operator,
-    operand: Box<Expression>,
+    BinOp {
+        left: Box<Expression>,
+        op: Operator,
+        right: Box<Expression>,
+    }, // A binary operation.
+    UnOp {
+        op: Operator,
+        operand: Box<Expression>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -92,10 +79,10 @@ fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, Expre
                     == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)))
                 {
                     Ok(Expression::ValueExpression(
-                        ValueExpression::CallExpression(CallExpression {
-                            identifier: id.clone(),
+                        ValueExpression::CallExpression {
+                            id: id.clone(),
                             arguments: parse_argument_list(tokens)?,
-                        }),
+                        },
                     ))
                 } else {
                     Ok(Expression::ValueExpression(ValueExpression::Identifier(
@@ -150,11 +137,11 @@ pub fn parse_expression(
             tokens.next();
             let right = parse_expression(tokens, precedence + 1)?;
 
-            left = Expression::BinOp(BinaryExpression {
+            left = Expression::BinOp {
                 op: op.clone(),
                 left: Box::new(left),
                 right: Box::new(right),
-            });
+            };
         } else {
             break;
         }
@@ -177,25 +164,30 @@ mod tests {
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
-        assert!(matches!(expression, Expression::BinOp(_)));
-        if let Expression::BinOp(binop) = expression {
-            assert!(matches!(*binop.left, Expression::BinOp(_)));
+        assert!(matches!(expression, Expression::BinOp { .. }));
+        if let Expression::BinOp { left, op, right } = expression {
+            assert!(matches!(*left, Expression::BinOp { .. }));
             assert!(matches!(
-                *binop.right,
+                *right,
                 Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(3)))
             ));
-            assert_eq!(binop.op, Operator::Plus);
+            assert_eq!(op, Operator::Plus);
 
-            if let Expression::BinOp(binop_inner) = *binop.left {
+            if let Expression::BinOp {
+                left: left_inner,
+                op: op_inner,
+                right: right_inner,
+            } = *left
+            {
                 assert_eq!(
-                    *binop_inner.left,
+                    *left_inner,
                     Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(15)))
                 );
                 assert_eq!(
-                    *binop_inner.right,
+                    *right_inner,
                     Expression::ValueExpression(ValueExpression::Identifier("x".to_string()))
                 );
-                assert_eq!(binop_inner.op, Operator::Times);
+                assert_eq!(op_inner, Operator::Times);
             } else {
                 panic!("Expected binary expression here");
             }
@@ -210,22 +202,22 @@ mod tests {
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
-        if let Expression::BinOp(root) = expression {
-            assert_eq!(root.op, Operator::Times);
+        if let Expression::BinOp { left, op, right } = expression {
+            assert_eq!(op, Operator::Times);
             assert_eq!(
-                *root.left,
+                *left,
                 Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(10)))
             );
 
             // Right side should be the result of the parenthesis: (5 + 3)
-            if let Expression::BinOp(inner) = *root.right {
-                assert_eq!(inner.op, Operator::Plus);
+            if let Expression::BinOp { left, op, right } = *right {
+                assert_eq!(op, Operator::Plus);
                 assert_eq!(
-                    *inner.left,
+                    *left,
                     Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(5)))
                 );
                 assert_eq!(
-                    *inner.right,
+                    *right,
                     Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(3)))
                 );
             } else {
@@ -243,23 +235,23 @@ mod tests {
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
-        if let Expression::BinOp(root) = expression {
-            assert_eq!(root.op, Operator::Plus);
+        if let Expression::BinOp { left, op, right } = expression {
+            assert_eq!(op, Operator::Plus);
             // Right side is the final + 4
             assert_eq!(
-                *root.right,
+                *right,
                 Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(4)))
             );
 
             // Left side is (1 + (2 * 3))
-            if let Expression::BinOp(middle) = *root.left {
-                assert_eq!(middle.op, Operator::Plus);
+            if let Expression::BinOp { left, op, right } = *left {
+                assert_eq!(op, Operator::Plus);
                 // Verify the multiplication is nested inside this right branch
                 assert_eq!(
-                    *middle.left,
+                    *left,
                     Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(1)))
                 );
-                assert!(matches!(*middle.right, Expression::BinOp(_)));
+                assert!(matches!(*right, Expression::BinOp { .. }));
             } else {
                 panic!("Should be a binop")
             }
@@ -276,26 +268,28 @@ mod tests {
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
-        if let Expression::BinOp(root) = expression {
-            assert_eq!(root.op, Operator::Times);
+        if let Expression::BinOp { left, op, right } = expression {
+            assert_eq!(op, Operator::Times);
             assert!(matches!(
-                *root.left,
-                Expression::ValueExpression(ValueExpression::CallExpression(_))
+                *left,
+                Expression::ValueExpression(ValueExpression::CallExpression { .. })
             ));
-            if let Expression::ValueExpression(ValueExpression::CallExpression(call)) = *root.left {
-                assert_eq!(call.identifier, "my_func");
+            if let Expression::ValueExpression(ValueExpression::CallExpression { id, arguments }) =
+                *left
+            {
+                assert_eq!(id, "my_func");
                 assert_eq!(
-                    call.arguments[0],
+                    arguments[0],
                     Expression::ValueExpression(ValueExpression::Identifier("a".to_string()))
                 );
                 assert_eq!(
-                    call.arguments[1],
+                    arguments[1],
                     Expression::ValueExpression(ValueExpression::Identifier("b".to_string()))
                 );
-                assert_eq!(call.arguments.len(), 2);
+                assert_eq!(arguments.len(), 2);
             }
             assert_eq!(
-                *root.right,
+                *right,
                 Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(2)))
             );
         } else {
@@ -322,10 +316,10 @@ mod tests {
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
-        if let Expression::BinOp(root) = expression {
-            assert_eq!(root.op, Operator::Minus);
-            if let Expression::BinOp(left_branch) = *root.left {
-                assert_eq!(left_branch.op, Operator::Divide);
+        if let Expression::BinOp { left, op, right } = expression {
+            assert_eq!(op, Operator::Minus);
+            if let Expression::BinOp { left, op, right } = *left {
+                assert_eq!(op, Operator::Divide);
             } else {
                 panic!("Division should be on the left branch");
             }

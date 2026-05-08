@@ -151,15 +151,13 @@ fn generate_ast_block(
             TokenType::Identifier(_) => {
                 // This must be an expression. If it is a binop expression with operator =, turn it into an assignment.
                 let expr = parse_expression(tokens, -1)?;
-                if let Expression::BinOp(binop) = expr.clone()
-                    && binop.op == Operator::Equal
+                if let Expression::BinOp { left, op, right } = expr.clone()
+                    && op == Operator::Equal
                 {
-                    if let Expression::ValueExpression(ValueExpression::Identifier(id)) =
-                        *binop.left
-                    {
+                    if let Expression::ValueExpression(ValueExpression::Identifier(id)) = *left {
                         block_statements.push(Statement::Assignment {
                             identifier: id,
-                            value: *binop.right.clone(),
+                            value: *right.clone(),
                         });
                     } else {
                         return Err(StatementError::AssignmentToNonId);
@@ -228,7 +226,7 @@ mod tests {
             assert!(matches!(ass, Statement::Assignment { identifier, value }));
             if let Statement::Assignment { identifier, value } = decl {
                 assert_eq!(identifier, "a");
-                assert!(matches!(value, Expression::BinOp(_)));
+                assert!(matches!(value, Expression::BinOp { left, op, right }));
             }
         }
         println!("{:?}", ast);
