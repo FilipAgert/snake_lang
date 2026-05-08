@@ -100,6 +100,7 @@ impl Operator {
 #[derive(Debug, PartialEq)]
 pub enum Symbol {
     Bracket(Bracket),
+    Colon,
     Semicolon,
 }
 #[derive(Debug, PartialEq)]
@@ -116,6 +117,7 @@ impl Symbol {
 
         match c {
             ';' => Some(Symbol::Semicolon),
+            ',' => Some(Symbol::Colon),
             _ => None,
         }
     }

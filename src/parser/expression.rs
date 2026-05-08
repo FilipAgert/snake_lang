@@ -46,14 +46,31 @@ pub enum ExpressionError {
     UnimplementedError,
     UnexpectedKeyword,
     UnexpectedSymbol,
+    UnexpectedEOF,
     MissingClosingBrace,
 }
 fn parse_argument_list(
     tokens: &mut Peekable<Iter<Token>>,
 ) -> Result<Vec<Expression>, ExpressionError> {
     // first token is left brace, stops on the corresponding right brace.
-    let exprs = Vec::<Expression>::new();
-    Err(ExpressionError::UnimplementedError)
+    let mut exprs = Vec::<Expression>::new();
+    // scan until we hit the same level of opening brace.
+    // seperate arguments at highest level by commas.
+    // call parse_expression on each comma seperated list
+    tokens.next(); // consume the opening brace.
+    while let Some(token) = tokens.peek() {
+        if token.token_type == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right)))
+        {
+            tokens.next(); // Consume the closing brace.
+            return Ok(exprs);
+        } else if token.token_type == TokenType::Symbol(Symbol::Colon) {
+            // Consume comma separated list
+            tokens.next();
+        } else {
+            exprs.push(parse_expression(tokens, 0)?);
+        }
+    }
+    Err(ExpressionError::UnexpectedEOF)
 }
 
 fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, ExpressionError> {
@@ -95,7 +112,7 @@ fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, Expre
         TokenType::Symbol(s) => match s {
             Symbol::Bracket(Bracket::Parenthesis(Side::Left)) => {
                 let expr = parse_expression(tokens, 0)?;
-                let next = tokens.next().ok_or(ExpressionError::MissingOperand)?;
+                let next = tokens.next().ok_or(ExpressionError::UnexpectedEOF)?;
                 if next.token_type
                     == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right)))
                 {
@@ -106,7 +123,7 @@ fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, Expre
             }
             _ => Err(ExpressionError::UnexpectedSymbol),
         },
-        TokenType::EOF => Err(ExpressionError::MissingOperand),
+        TokenType::EOF => Err(ExpressionError::UnexpectedEOF),
     }
 }
 
@@ -145,7 +162,7 @@ mod tests {
     use super::*;
     use crate::lexer::lexer::scan;
     use crate::lexer::token::*;
-    use crate::parser::parser::*;
+    use crate::parser::expression::*;
 
     #[test]
     fn test_build_expression_1() {
@@ -258,6 +275,18 @@ mod tests {
                 *root.left,
                 Expression::ValueExpression(ValueExpression::CallExpression(_))
             ));
+            if let Expression::ValueExpression(ValueExpression::CallExpression(call)) = *root.left {
+                assert_eq!(call.identifier, "my_func");
+                assert_eq!(
+                    call.arguments[0],
+                    Expression::ValueExpression(ValueExpression::Identifier("a".to_string()))
+                );
+                assert_eq!(
+                    call.arguments[1],
+                    Expression::ValueExpression(ValueExpression::Identifier("b".to_string()))
+                );
+                assert_eq!(call.arguments.len(), 2);
+            }
             assert_eq!(
                 *root.right,
                 Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(2)))
