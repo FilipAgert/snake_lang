@@ -2,6 +2,7 @@ use crate::lexer::token::*;
 use crate::parser::expression::*;
 use std::iter::Peekable;
 use std::slice::Iter;
+#[derive(Debug, Clone)]
 
 enum Statement {
     Root {
@@ -23,11 +24,13 @@ enum Statement {
     ExpressionStatement(Expression),
 }
 
+#[derive(Debug, Clone)]
 struct Declaration {
     identifier: String,
     keyword: DeclarationKeyword,
 }
 
+#[derive(Debug, Clone)]
 enum StatementError {
     ExpressionError(ExpressionError),
     UnimplementedError,
@@ -54,6 +57,7 @@ impl From<Expression> for Statement {
         Statement::ExpressionStatement(expr)
     }
 }
+#[derive(Debug, Clone)]
 enum DeclarationError {
     MissingDeclarationKeyword,
     MissingIdentifier,
@@ -145,4 +149,39 @@ pub fn generate_ast(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, Sta
     Ok(Statement::Root {
         statements: root_statements,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Binary;
+    use std::os::linux::raw::stat;
+
+    use super::*;
+    use crate::lexer::lexer::scan;
+    use crate::lexer::token::*;
+    use crate::parser::expression::*;
+
+    #[test]
+    fn test_build_expression_1() {
+        let input = "int a; a = 15*x+3;";
+        let mut tokens = scan(input);
+        let ast = generate_ast(&mut tokens.iter().peekable()).unwrap();
+        assert!(matches!(ast, Statement::Root { statements: _ }));
+        if let Statement::Root { statements } = ast.clone() {
+            assert!(statements.len() == 2);
+            let decl = &statements[0];
+            assert!(matches!(decl, Statement::Declaration(_)));
+            if let Statement::Declaration(d) = decl {
+                assert_eq!(d.identifier, "a");
+                assert_eq!(d.keyword, DeclarationKeyword::Int);
+            }
+            let ass = &statements[1];
+            assert!(matches!(ass, Statement::Assignment { identifier, value }));
+            if let Statement::Assignment { identifier, value } = decl {
+                assert_eq!(identifier, "a");
+                assert!(matches!(value, Expression::BinOp(_)));
+            }
+        }
+        println!("{:?}", ast);
+    }
 }

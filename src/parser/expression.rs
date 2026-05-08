@@ -44,7 +44,7 @@ pub struct UnaryExpression {
     operand: Box<Expression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExpressionError {
     IncompatibleTypes,
     InvalidExpressionToken,
