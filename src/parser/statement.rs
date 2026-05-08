@@ -37,6 +37,7 @@ enum StatementError {
     UnexpectedEOF,
     UnexpectedToken,
     DeclarationError(DeclarationError),
+    ExpectedClosingBrace,
     AssignmentToNonId,
 }
 
@@ -100,15 +101,25 @@ fn parse_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Declaration, 
 fn parse_fn_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, StatementError> {
     todo!();
 }
-
 pub fn generate_ast(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, StatementError> {
-    let mut root_statements = Vec::<Statement>::new();
+    let root_statements = generate_ast_block(tokens)?;
+    if !matches!(tokens.next(), None) {
+        return Err(StatementError::UnexpectedToken);
+    }
+    Ok(Statement::Root {
+        statements: root_statements,
+    })
+}
+fn generate_ast_block(
+    tokens: &mut Peekable<Iter<Token>>,
+) -> Result<Vec<Statement>, StatementError> {
+    let mut block_statements = Vec::<Statement>::new();
 
     while let Some(token) = tokens.peek() {
         match token.token_type {
             TokenType::Keyword(Keyword::Declaration(_)) => {
                 let decl = parse_declaration(tokens)?;
-                root_statements.push(Statement::Declaration(decl));
+                block_statements.push(Statement::Declaration(decl));
             }
             TokenType::Keyword(Keyword::FunctionDeclaration) => {
                 todo!();
@@ -122,7 +133,7 @@ pub fn generate_ast(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, Sta
                     if let Expression::ValueExpression(ValueExpression::Identifier(id)) =
                         *binop.left
                     {
-                        root_statements.push(Statement::Assignment {
+                        block_statements.push(Statement::Assignment {
                             identifier: id,
                             value: *binop.right.clone(),
                         });
@@ -130,25 +141,39 @@ pub fn generate_ast(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, Sta
                         return Err(StatementError::AssignmentToNonId);
                     }
                 } else {
-                    root_statements.push(expr.into());
+                    block_statements.push(expr.into());
                 }
             }
             TokenType::Op(Operator::Minus) | TokenType::Literal(_) => {
-                root_statements.push(parse_expression(tokens, 0)?.into());
+                block_statements.push(parse_expression(tokens, 0)?.into());
             }
             TokenType::Symbol(Symbol::Semicolon) => {
-                tokens.next().expect("Should be unreachable");
+                tokens.next();
             }
-            TokenType::EOF => break,
+            TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Left))) => {
+                tokens.next(); // consume token and descend into block.
+                block_statements.push(Statement::Block {
+                    statements: generate_ast_block(tokens)?,
+                });
+                // expect closing brace. consumes it.
+                if !matches!(tokens.next(), Some(token) if token.token_type == TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))))
+                {
+                    return Err(StatementError::ExpectedClosingBrace);
+                }
+            }
+            TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => break,
+            // do not consume closing brace so that block calling can check for its existance
+            TokenType::EOF => {
+                tokens.next(); // consume the token.
+                break;
+            }
             _ => {
                 return Err(StatementError::UnexpectedToken);
             }
         }
     }
 
-    Ok(Statement::Root {
-        statements: root_statements,
-    })
+    Ok(block_statements)
 }
 
 #[cfg(test)]
@@ -165,7 +190,7 @@ mod tests {
     fn test_build_expression_1() {
         let input = "int a; a = 15*x+3;";
         let mut tokens = scan(input);
-        let ast = generate_ast(&mut tokens.iter().peekable()).unwrap();
+        let ast = generate_ast_block(&mut tokens.iter().peekable()).unwrap();
         assert!(matches!(ast, Statement::Root { statements: _ }));
         if let Statement::Root { statements } = ast.clone() {
             assert!(statements.len() == 2);
