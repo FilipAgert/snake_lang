@@ -190,7 +190,7 @@ mod tests {
     fn test_build_expression_1() {
         let input = "int a; a = 15*x+3;";
         let mut tokens = scan(input);
-        let ast = generate_ast_block(&mut tokens.iter().peekable()).unwrap();
+        let ast = generate_ast(&mut tokens.iter().peekable()).unwrap();
         assert!(matches!(ast, Statement::Root { statements: _ }));
         if let Statement::Root { statements } = ast.clone() {
             assert!(statements.len() == 2);
