@@ -28,6 +28,7 @@ pub enum Statement {
 pub struct Declaration {
     identifier: String,
     keyword: DeclarationKeyword,
+    assignment: Option<Expression>,
 }
 
 #[derive(Debug, Clone)]
@@ -38,6 +39,7 @@ enum StatementError {
     UnexpectedToken,
     DeclarationError(DeclarationError),
     ExpectedClosingBrace,
+    ExpectedSemiColon,
     AssignmentToNonId,
 }
 
@@ -66,7 +68,7 @@ enum DeclarationError {
     UnexpectedToken,
 }
 
-fn parse_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Declaration, DeclarationError> {
+fn parse_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Declaration, StatementError> {
     let decl = match tokens
         .next()
         .ok_or(DeclarationError::MissingDeclarationKeyword)?
@@ -84,18 +86,24 @@ fn parse_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Declaration, 
         _ => Err(DeclarationError::MissingIdentifier),
     }?;
 
-    match tokens
-        .next()
-        .ok_or(DeclarationError::MissingSemicolon)?
+    let assignment: Option<Expression> = match tokens
+        .peek()
+        .ok_or(StatementError::UnexpectedEOF)?
         .token_type
     {
-        TokenType::Symbol(Symbol::Semicolon) => Ok(()),
-        _ => Err(DeclarationError::MissingSemicolon),
-    }?;
-
+        TokenType::Symbol(Symbol::Semicolon | Symbol::Colon) => None, //
+        TokenType::Op(Operator::Equal) => {
+            tokens.next(); // Consume equal
+            Some(parse_expression(tokens, 0)?)
+        }
+        _ => {
+            return Err(StatementError::UnexpectedToken);
+        }
+    };
     Ok(Declaration {
         identifier: id,
         keyword: decl,
+        assignment: assignment,
     })
 }
 fn parse_fn_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, StatementError> {
@@ -124,6 +132,16 @@ fn generate_ast_block(
             TokenType::Keyword(Keyword::Declaration(_)) => {
                 let decl = parse_declaration(tokens)?;
                 block_statements.push(Statement::Declaration(decl));
+                //expect and consume semicolon.
+                if !matches!(
+                    tokens
+                        .next()
+                        .ok_or(StatementError::UnexpectedEOF)?
+                        .token_type,
+                    TokenType::Symbol(Symbol::Semicolon),
+                ) {
+                    return Err(StatementError::ExpectedSemiColon);
+                }
             }
             TokenType::Keyword(Keyword::FunctionDeclaration) => {
                 // consume function declaration keyword
