@@ -99,6 +99,10 @@ fn parse_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Declaration, 
     })
 }
 fn parse_fn_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, StatementError> {
+    // expect the identifier to be the first token.
+    // then we expect an argument list made of several declarations
+    // then we expect a return type by -> type
+    // then a function body
     todo!();
 }
 pub fn generate_ast(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, StatementError> {
@@ -122,7 +126,9 @@ fn generate_ast_block(
                 block_statements.push(Statement::Declaration(decl));
             }
             TokenType::Keyword(Keyword::FunctionDeclaration) => {
-                todo!();
+                // consume function declaration keyword
+                tokens.next();
+                block_statements.push(parse_fn_declaration(tokens)?);
             }
             TokenType::Identifier(_) => {
                 // This must be an expression. If it is a binop expression with operator =, turn it into an assignment.
