@@ -1,6 +1,6 @@
 mod lexer;
-use lexer::lexer::scan;
-use lexer::token::{Keyword, Operator, Token};
+mod parser;
+use lexer::token::{Keyword, BinOp, Token};
 
 fn main() {
     let input = "int x = 5;";
