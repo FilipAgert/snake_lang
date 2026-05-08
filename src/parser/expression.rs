@@ -99,7 +99,7 @@ fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, Expre
             literal.clone(),
         ))),
         TokenType::Op(op) => match op {
-            Operator::Minus => Err(ExpressionError::UnimplementedError),
+            Operator::Minus => todo!(),
             _ => Err(ExpressionError::OperandOnLhsError),
         },
         TokenType::Keyword(_) => Err(ExpressionError::UnexpectedKeyword),
