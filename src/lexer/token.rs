@@ -21,9 +21,23 @@ pub enum TokenType {
     Keyword(Keyword),
     Identifier(String),
     Op(Operator),
-    Integer(i64),
+    Literal(Literal),
     Symbol(Symbol),
     EOF,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Literal {
+    Integer(i32),
+}
+
+impl Literal {
+    pub fn from_str(str: &str) -> Option<Self> {
+        if let Ok(int) = str.parse::<i32>() {
+            return Some(Literal::Integer(int));
+        }
+        None
+    }
 }
 
 impl TokenType {
@@ -40,8 +54,8 @@ impl TokenType {
         if let Some(keyword) = Keyword::from_str(str) {
             return TokenType::Keyword(keyword);
         }
-        if let Ok(int) = str.parse::<i64>() {
-            return TokenType::Integer(int);
+        if let Some(literal) = Literal::from_str(str) {
+            return TokenType::Literal(literal);
         }
         TokenType::Identifier(str.to_string())
     }

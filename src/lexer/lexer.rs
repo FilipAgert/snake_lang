@@ -78,7 +78,7 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lexer::token::{Bracket, Keyword, Operator, Side, Symbol, Token};
+    use crate::lexer::token::{Bracket, Keyword, Literal, Operator, Side, Symbol};
 
     #[test]
     fn test_sep_strings() {
@@ -112,7 +112,10 @@ mod tests {
             TokenType::Identifier("val".to_string())
         );
         assert_eq!(result[2].token_type, TokenType::Op(Operator::Equal));
-        assert_eq!(result[3].token_type, TokenType::Integer(4));
+        assert_eq!(
+            result[3].token_type,
+            TokenType::Literal(Literal::Integer(4))
+        );
         assert_eq!(result[4].token_type, TokenType::Symbol(Symbol::Semicolon));
         assert_eq!(result[5].token_type, TokenType::Keyword(Keyword::Int));
         assert_eq!(result[6].token_type, TokenType::Identifier("x".to_string()));
@@ -122,7 +125,10 @@ mod tests {
             result[9].token_type,
             TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)))
         );
-        assert_eq!(result[10].token_type, TokenType::Integer(4));
+        assert_eq!(
+            result[10].token_type,
+            TokenType::Literal(Literal::Integer(4))
+        );
         assert_eq!(
             result[11].token_type,
             TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right)))
