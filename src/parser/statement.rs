@@ -32,9 +32,28 @@ enum StatementError {
     ExpressionError(ExpressionError),
     UnimplementedError,
     UnexpectedEOF,
+    UnexpectedToken,
     DeclarationError(DeclarationError),
+    AssignmentToNonId,
 }
 
+impl From<DeclarationError> for StatementError {
+    fn from(error: DeclarationError) -> Self {
+        StatementError::DeclarationError(error)
+    }
+}
+
+impl From<ExpressionError> for StatementError {
+    fn from(error: ExpressionError) -> Self {
+        StatementError::ExpressionError(error)
+    }
+}
+
+impl From<Expression> for Statement {
+    fn from(expr: Expression) -> Self {
+        Statement::ExpressionStatement(expr)
+    }
+}
 enum DeclarationError {
     MissingDeclarationKeyword,
     MissingIdentifier,
@@ -75,7 +94,7 @@ fn parse_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Declaration, 
     })
 }
 fn parse_fn_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, StatementError> {
-    Err(StatementError::UnimplementedError)
+    todo!();
 }
 
 pub fn generate_ast(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, StatementError> {
@@ -87,10 +106,38 @@ pub fn generate_ast(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, Sta
                 let decl = parse_declaration(tokens)?;
                 root_statements.push(Statement::Declaration(decl));
             }
-            TokenType::Keyword(Keyword::FunctionDeclaration) => {}
-
+            TokenType::Keyword(Keyword::FunctionDeclaration) => {
+                todo!();
+            }
+            TokenType::Identifier(_) => {
+                // This must be an expression. If it is a binop expression with operator =, turn it into an assignment.
+                let expr = parse_expression(tokens, -1)?;
+                if let Expression::BinOp(binop) = expr.clone()
+                    && binop.op == Operator::Equal
+                {
+                    if let Expression::ValueExpression(ValueExpression::Identifier(id)) =
+                        *binop.left
+                    {
+                        root_statements.push(Statement::Assignment {
+                            identifier: id,
+                            value: *binop.right.clone(),
+                        });
+                    } else {
+                        return Err(StatementError::AssignmentToNonId);
+                    }
+                } else {
+                    root_statements.push(expr.into());
+                }
+            }
+            TokenType::Op(Operator::Minus) | TokenType::Literal(_) => {
+                root_statements.push(parse_expression(tokens, 0)?.into());
+            }
             TokenType::Symbol(Symbol::Semicolon) => {
                 tokens.next().expect("Should be unreachable");
+            }
+            TokenType::EOF => break,
+            _ => {
+                return Err(StatementError::UnexpectedToken);
             }
         }
     }

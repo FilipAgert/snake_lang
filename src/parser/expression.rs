@@ -1,17 +1,18 @@
 use crate::lexer::token::*;
+use std::fmt::Binary;
 use std::iter::Peekable;
 use std::slice::Iter;
 
 // We should do binary operations first...
 // Asignment,
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ValueExpression {
     Literal(Literal),
     Identifier(String),
     CallExpression(CallExpression),
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     // an expression is something which returns a value. It is NOT a statement.
     // An assignment, for example, is a binary statement which assigns a variable to the result of an expression.
@@ -20,18 +21,24 @@ pub enum Expression {
     UnOp(UnaryExpression),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CallExpression {
     identifier: String,
     arguments: Vec<Expression>,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BinaryExpression {
-    op: Operator,
-    left: Box<Expression>,
-    right: Box<Expression>,
+    pub op: Operator,
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
 }
-#[derive(Debug, PartialEq)]
+
+impl From<BinaryExpression> for Expression {
+    fn from(binop: BinaryExpression) -> Self {
+        Expression::BinOp(binop)
+    }
+}
+#[derive(Debug, PartialEq, Clone)]
 pub struct UnaryExpression {
     op: Operator,
     operand: Box<Expression>,
@@ -127,7 +134,7 @@ fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, Expre
     }
 }
 
-fn parse_expression(
+pub fn parse_expression(
     tokens: &mut Peekable<Iter<Token>>,
     min_precedence: i32,
 ) -> Result<Expression, ExpressionError> {
