@@ -38,18 +38,19 @@ pub enum ExpressionT {
         op: Operator,
         operand: Box<Expression>,
     },
+    Error,
 }
 
 #[derive(Debug, Clone)]
 pub enum ExpressionError {
     MissingOperand,
-    OperandOnLhsError,
-    UnexpectedKeyword,
-    UnexpectedSymbol,
+    BinaryOperandOnLhsError(Operator),
+    UnexpectedKeyword(Keyword),
+    UnexpectedSymbol(Symbol),
     UnexpectedEOF,
-    MissingClosingBrace,
+    MissingClosingBrace(TokenType),
 }
-fn parse_argument_list(state: &mut ParseState) -> Result<Vec<Expression>, ExpressionError> {
+fn parse_argument_list(state: &mut ParseState) -> Vec<Expression> {
     // first token is left brace, stops on the corresponding right brace.
     let mut exprs = Vec::<Expression>::new();
     // scan until we hit the same level of opening brace.
@@ -61,20 +62,22 @@ fn parse_argument_list(state: &mut ParseState) -> Result<Vec<Expression>, Expres
         if token.token_type == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right)))
         {
             state.next(); // Consume the closing brace.
-            return Ok(exprs);
-        } else if token.token_type == TokenType::Symbol(Symbol::Comma) {
+            return exprs;
+        }
+
+        if token.token_type == TokenType::Symbol(Symbol::Comma) {
             // Consume comma separated list
             state.next();
         } else if token.token_type == TokenType::EOF {
             break;
         } else {
-            exprs.push(parse_expression(state, 0)?);
+            exprs.push(parse_expression(state, 0));
         }
     }
-    Err(ExpressionError::UnexpectedEOF)
+    exprs
 }
 
-fn parse_primary(state: &mut ParseState) -> Result<Expression, ExpressionError> {
+fn parse_primary(state: &mut ParseState) -> Expression {
     let next_token = state.next();
     match &next_token.token_type {
         TokenType::Identifier(id) => {
@@ -84,7 +87,7 @@ fn parse_primary(state: &mut ParseState) -> Result<Expression, ExpressionError> 
                 == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)))
                 && token.token_type != TokenType::EOF
             {
-                let arguments = parse_argument_list(state)?;
+                let arguments = parse_argument_list(state);
                 let last_span = arguments.last().map(|e| e.span).unwrap_or(next_token.span);
                 let fn_span = Span::merge(
                     &next_token.span,
@@ -94,56 +97,99 @@ fn parse_primary(state: &mut ParseState) -> Result<Expression, ExpressionError> 
                     },
                 );
                 // + 1 to consume the brace.
-                Ok(Expression {
+                Expression {
                     etype: ExpressionT::ValueExpression(ValueExpression::CallExpression {
                         id: id.clone(),
                         arguments: arguments,
                     }),
                     span: fn_span,
                     node_id: state.next_id(),
-                })
+                }
             } else {
                 // variable
-                Ok(Expression {
+                Expression {
                     etype: ExpressionT::ValueExpression(ValueExpression::Identifier(id.clone())),
                     span: next_token.span,
                     node_id: state.next_id(),
-                })
+                }
             }
         }
-        TokenType::Literal(literal) => Ok(Expression {
+        TokenType::Literal(literal) => Expression {
             span: next_token.span,
             etype: ExpressionT::ValueExpression(ValueExpression::Literal(literal.clone())),
             node_id: state.next_id(),
-        }),
+        },
         TokenType::Op(op) => match op {
             Operator::Minus => todo!(),
-            _ => Err(ExpressionError::OperandOnLhsError),
+            _ => {
+                state.report(
+                    next_token.span,
+                    ExpressionError::BinaryOperandOnLhsError(op.clone()),
+                );
+                Expression {
+                    etype: ExpressionT::Error,
+                    span: next_token.span,
+                    node_id: state.next_id(),
+                }
+            }
         },
-        TokenType::Keyword(_) => Err(ExpressionError::UnexpectedKeyword),
+        TokenType::Keyword(keyword) => {
+            state.report(
+                next_token.span,
+                ExpressionError::UnexpectedKeyword(keyword.clone()),
+            );
+            Expression {
+                etype: ExpressionT::Error,
+                span: next_token.span,
+                node_id: state.next_id(),
+            }
+        }
         TokenType::Symbol(s) => match s {
             Symbol::Bracket(Bracket::Parenthesis(Side::Left)) => {
-                let expr = parse_expression(state, 0)?;
-                let next = state.next();
+                let expr = parse_expression(state, 0);
+                let next = state.peek();
                 if next.token_type
                     == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right)))
                 {
-                    Ok(expr)
+                    state.next();
+                    expr
                 } else {
-                    Err(ExpressionError::MissingClosingBrace)
+                    state.report(
+                        next_token.span,
+                        ExpressionError::MissingClosingBrace(next_token.token_type),
+                    );
+                    Expression {
+                        etype: ExpressionT::Error,
+                        span: next_token.span,
+                        node_id: state.next_id(),
+                    }
                 }
             }
-            _ => Err(ExpressionError::UnexpectedSymbol),
+            _ => {
+                state.report(
+                    next_token.span,
+                    ExpressionError::UnexpectedSymbol(s.clone()),
+                );
+                Expression {
+                    etype: ExpressionT::Error,
+                    span: next_token.span,
+                    node_id: state.next_id(),
+                }
+            }
         },
-        TokenType::EOF => Err(ExpressionError::UnexpectedEOF),
+        TokenType::EOF => {
+            state.report(next_token.span, ExpressionError::UnexpectedEOF);
+            Expression {
+                etype: ExpressionT::Error,
+                span: next_token.span,
+                node_id: state.next_id(),
+            }
+        }
     }
 }
 
-pub fn parse_expression(
-    state: &mut ParseState,
-    min_precedence: i32,
-) -> Result<Expression, ExpressionError> {
-    let mut left = parse_primary(state)?;
+pub fn parse_expression(state: &mut ParseState, min_precedence: i32) -> Expression {
+    let mut left = parse_primary(state);
 
     loop {
         let token_type = state.peek().token_type.clone();
@@ -154,7 +200,7 @@ pub fn parse_expression(
             }
 
             state.next();
-            let right = parse_expression(state, precedence + 1)?;
+            let right = parse_expression(state, precedence + 1);
 
             left = Expression {
                 span: Span::merge(&left.span, &right.span),
@@ -169,7 +215,7 @@ pub fn parse_expression(
             break;
         }
     }
-    Ok(left)
+    left
 }
 
 #[cfg(test)]
@@ -179,13 +225,15 @@ mod tests {
     use super::*;
     use crate::lexer::lexer::scan;
     use crate::lexer::token::*;
+    use crate::parser::diagnostic::Diagnostic;
     use crate::parser::expression::*;
 
     #[test]
     fn test_build_expression_1() {
         let input = "15*x+3";
-        let mut state = ParseState::new(scan(input));
-        let expression = parse_expression(&mut state, 0).unwrap();
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let expression = parse_expression(&mut state, 0);
 
         assert!(matches!(expression.etype, ExpressionT::BinOp { .. }));
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
@@ -222,8 +270,9 @@ mod tests {
     fn test_parenthesis_precedence() {
         // (5 + 3) should be evaluated first, making it a child of '*'
         let input = "10*(5+3)";
-        let mut state = ParseState::new(scan(input));
-        let expression = parse_expression(&mut state, 0).unwrap();
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let expression = parse_expression(&mut state, 0);
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Times);
@@ -255,8 +304,9 @@ mod tests {
     fn test_long_expression_chain() {
         // 1 + 2 * 3 + 4 should result in ((1 + (2 * 3)) + 4)
         let input = "1+2*3+4";
-        let mut state = ParseState::new(scan(input));
-        let expression = parse_expression(&mut state, 0).unwrap();
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let expression = parse_expression(&mut state, 0);
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Plus);
@@ -288,8 +338,9 @@ mod tests {
         // Testing: my_func(a, b) * 2
         // Note: parse_argument_list must be implemented for this to pass
         let input = "my_func(a, b) * 2";
-        let mut state = ParseState::new(scan(input));
-        let expression = parse_expression(&mut state, 0).unwrap();
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let expression = parse_expression(&mut state, 0);
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Times);
@@ -323,8 +374,9 @@ mod tests {
     #[test]
     fn test_deeply_nested_parentheses() {
         let input = "(((10)))";
-        let mut state = ParseState::new(scan(input));
-        let expression = parse_expression(&mut state, 0).unwrap();
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let expression = parse_expression(&mut state, 0);
 
         assert_eq!(
             expression.etype,
@@ -336,8 +388,9 @@ mod tests {
     fn test_operator_precedence_descending() {
         // 10 / 2 - 1 should be ((10 / 2) - 1)
         let input = "10/2-1";
-        let mut state = ParseState::new(scan(input));
-        let expression = parse_expression(&mut state, 0).unwrap();
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let expression = parse_expression(&mut state, 0);
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Minus);
