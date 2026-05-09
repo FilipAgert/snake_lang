@@ -9,11 +9,11 @@ use crate::{
 };
 
 #[derive(Debug)]
-enum SyntaxError {
-    IncompatibleTypes(Span),
-    UnexpectedRoot(Span),
-    UseBeforeDefinition(Span),
-    AlreadyDefinedInScope(Span),
+pub enum SyntaxError {
+    IncompatibleTypes,
+    UnexpectedRoot,
+    UseBeforeDefinition,
+    AlreadyDefinedInScope,
 }
 #[derive(Clone, PartialEq, Debug)]
 enum ReturnType {
