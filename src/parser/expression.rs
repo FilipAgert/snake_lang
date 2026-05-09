@@ -19,8 +19,8 @@ pub enum ValueExpression {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Expression {
-    etype: ExpressionT,
-    span: Span,
+    pub etype: ExpressionT,
+    pub span: Span,
 }
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExpressionT {
