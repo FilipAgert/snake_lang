@@ -114,16 +114,7 @@ impl SymTables {
 pub fn get_tables(root: &Statement, diag: &mut Diagnostic, num_ids: usize) -> SymTables {
     let mut tables = SymTables::new(num_ids);
     let mut symbol_table = SymbolTable::new();
-    tables.depth_table[root.node_id] = Some(symbol_table.depth());
-    tables.link_table[root.node_id] = root.node_id;
-    match &root.stype {
-        StatementT::Root { statements } => {
-            for statement in statements {
-                populate_link_table(statement, &mut tables.link_table, &mut symbol_table, diag);
-            }
-        }
-        _ => panic!("Should only call this method on the root"),
-    }
+    populate_link_table(root, &mut tables.link_table, &mut symbol_table, diag);
     tables
 }
 
@@ -134,7 +125,12 @@ fn populate_link_table(
     diag: &mut Diagnostic,
 ) {
     match &statement.stype {
-        StatementT::Root { .. } => panic!("Unexpected root"),
+        StatementT::Root { statements } => {
+            link_table[statement.node_id] = statement.node_id;
+            for statement in statements {
+                populate_link_table(statement, link_table, symbol_table, diag);
+            }
+        }
         StatementT::Assignment { identifier, value } => {
             pop_link_tab_exp(&value, link_table, symbol_table, diag); // expression should also be filled.
             if let Some(symbol) = symbol_table.lookup(&identifier) {
