@@ -158,6 +158,12 @@ fn populate_link_table(
             keyword,
             assignment,
         } => {
+            assignment
+                .as_ref()
+                .map(|a| pop_link_tab_exp(&a, link_table, symbol_table, diag));
+            // check assignment FIRST since then we will catch errors for self-referencing in assigment.
+            // e.g. int x=  x+1 not allowed.
+            // it does not work for global scope since these are added in the first pass.
             if let Some(symbol) = symbol_table.lookup(identifier)
                 && symbol.depth == symbol_table.depth()
                 && symbol.depth > SymbolTable::GLOBAL_SCOPE_DEPTH
@@ -168,9 +174,6 @@ fn populate_link_table(
                 symbol_table.define(identifier.clone(), statement.node_id);
                 link_table[statement.node_id] = statement.node_id;
             }
-            assignment
-                .as_ref()
-                .map(|a| pop_link_tab_exp(&a, link_table, symbol_table, diag));
         }
         StatementT::ExpressionStatement(expr) => pop_link_tab_exp(
             &Expression {
