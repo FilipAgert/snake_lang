@@ -1,24 +1,28 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use crate::{
     lexer::token::{DeclarationKeyword, Literal, Span},
     parser::{
         expression::{Expression, ExpressionT, ValueExpression},
-        statement::*,
+        statement::{self, *},
     },
 };
 
 enum SyntaxError {
     IncompatibleTypes(Span),
+    UnexpectedRoot(Span),
+    UseBeforeDefinition(Span),
+    AlreadyDefinedInScope(Span),
 }
+#[derive(Clone, PartialEq)]
 enum ReturnType {
-    Literal(Literal),
-    Custom(String), // custom datatype: by string.
+    Standard(DeclarationKeyword),
+    Custom(usize), // custom datatype: by string.
 }
 
-impl From<Literal> for ReturnType {
-    fn from(value: Literal) -> Self {
-        ReturnType::Literal(value)
+impl From<DeclarationKeyword> for ReturnType {
+    fn from(value: DeclarationKeyword) -> Self {
+        ReturnType::Standard(value)
     }
 }
 
@@ -28,20 +32,15 @@ struct Symbol {
     symbol_id: usize,
     depth: usize,
     identifier: String,
-    symbol_type: SymbolType,
 }
-enum SymbolType {
-    Variable,
-    Function,
-    Type, // int, bool, CustomStruct
-}
+
 struct SymbolTable {
     scopes: Vec<HashMap<String, Symbol>>,
 }
 
 impl SymbolTable {
-    fn define(self: &mut Self, id: String, node_id: usize, symbol_type: SymbolType) {
-        let depth = self.scopes.len() - 1;
+    fn define(self: &mut Self, id: String, node_id: usize) {
+        let depth = self.depth();
         if let Some(current_scope) = self.scopes.last_mut() {
             current_scope.insert(
                 id.clone(),
@@ -49,7 +48,6 @@ impl SymbolTable {
                     symbol_id: node_id,
                     depth,
                     identifier: id,
-                    symbol_type: symbol_type,
                 },
             );
         }
@@ -63,29 +61,157 @@ impl SymbolTable {
         }
         None
     }
+
+    fn push_empty(&mut self) {
+        self.scopes.push(HashMap::new());
+    }
+    fn pop(&mut self) {
+        self.scopes.pop();
+    }
+
+    fn new() -> Self {
+        let mut s = Self { scopes: Vec::new() };
+        s.push_empty();
+        s
+    }
+
+    fn depth(&self) -> usize {
+        self.scopes.len() - 1
+    }
 }
 
-pub fn analyze_value_expression(value_exp: &ValueExpression) -> Result<ReturnType, SyntaxError> {
-    match value_exp {
-        ValueExpression::Literal(literal) => Ok(literal.clone().into()),
-        _ => todo!(),
+struct SymTables {
+    link_table: Vec<usize>,
+    type_table: Vec<Option<ReturnType>>,
+    depth_table: Vec<Option<usize>>,
+}
+
+impl SymTables {
+    fn new(num_ids: usize) -> Self {
+        Self {
+            link_table: vec![0; num_ids],
+            type_table: vec![None; num_ids],
+            depth_table: vec![Some(0); num_ids],
+        }
     }
 }
-pub fn analyze_expression(expression: &Expression) -> Result<ReturnType, SyntaxError> {
-    match &expression.etype {
-        ExpressionT::BinOp { left, op, right } => todo!(),
-        ExpressionT::UnOp { op, operand } => todo!(),
-        ExpressionT::ValueExpression(val_exp) => match val_exp {
-            ValueExpression::Literal(literal) => todo!(),
-            _ => todo!(),
-        },
-    }
+
+pub fn get_tables(root: &Statement, num_ids: usize) -> SymTables {
+    let mut tables = SymTables::new(num_ids);
+    let mut symbol_table = SymbolTable::new();
+
+    tables
 }
-pub fn analyze_statement(statement: &Statement) -> Result<(), SyntaxError> {
+
+fn populate_tables(
+    statement: &Statement,
+    tables: &mut SymTables,
+    symbol_table: &mut SymbolTable,
+) -> Result<(), SyntaxError> {
     match &statement.stype {
-        StatementT::Root { statements } | StatementT::Block { statements } => (),
+        StatementT::Root { .. } => return Err(SyntaxError::UnexpectedRoot(statement.span)),
+        StatementT::Assignment { identifier, value } => {
+            populate_tables_expression(&value, tables, symbol_table)?; // expression should also be filled.
+            if let Some(symbol) = symbol_table.lookup(&identifier) {
+                tables.link_table[statement.node_id] = symbol.symbol_id;
+            } else {
+                return Err(SyntaxError::UseBeforeDefinition(statement.span));
+            }
+        }
+        StatementT::Declaration {
+            identifier,
+            keyword,
+            assignment,
+        } => {
+            if let Some(symbol) = symbol_table.lookup(identifier)
+                && symbol.depth == symbol_table.depth()
+            {
+                return Err(SyntaxError::AlreadyDefinedInScope(statement.span));
+            } else {
+                symbol_table.define(identifier.clone(), statement.node_id);
+                tables.link_table[statement.node_id] = statement.node_id;
+                tables.type_table[statement.node_id] = Some((*keyword).into());
+                tables.depth_table[statement.node_id] = Some(symbol_table.depth());
+            }
+            assignment
+                .as_ref()
+                .map(|a| populate_tables_expression(&a, tables, symbol_table));
+        }
+        StatementT::ExpressionStatement(expr) => populate_tables_expression(
+            &Expression {
+                etype: expr.clone(),
+                span: statement.span,
+                node_id: statement.node_id,
+            },
+            tables,
+            symbol_table,
+        )?,
+        StatementT::Block { statements } => {
+            tables.depth_table[statement.node_id] = Some(symbol_table.depth());
+            tables.link_table[statement.node_id] = statement.node_id;
 
-        _ => todo!(),
+            symbol_table.push_empty();
+            for statement in statements {
+                populate_tables(statement, tables, symbol_table)?
+            }
+            symbol_table.pop();
+        }
+        StatementT::FunctionDeclaration {
+            identifier,
+            parameters,
+            return_type,
+            body,
+        } => {
+            if let Some(symbol) = symbol_table.lookup(identifier)
+                && symbol.depth == symbol_table.depth()
+            {
+                return Err(SyntaxError::AlreadyDefinedInScope(statement.span));
+            }
+            tables.depth_table[statement.node_id] = Some(symbol_table.depth());
+            tables.link_table[statement.node_id] = statement.node_id;
+            tables.type_table[statement.node_id] = Some((*return_type).into());
+            for parameter in parameters {
+                populate_tables(parameter, tables, symbol_table)?;
+            }
+
+            symbol_table.push_empty();
+            for statement in body {
+                populate_tables(statement, tables, symbol_table)?;
+            }
+            symbol_table.pop();
+        }
+    }
+    Ok(())
+}
+
+fn populate_tables_expression(
+    expression: &Expression,
+    tables: &mut SymTables,
+    symbol_table: &mut SymbolTable,
+) -> Result<(), SyntaxError> {
+    tables.depth_table[expression.node_id] = Some(symbol_table.depth());
+    match &expression.etype {
+        ExpressionT::ValueExpression(val) => match val {
+            ValueExpression::Literal(l) => {
+                tables.link_table[expression.node_id] = expression.node_id;
+                tables.type_table[expression.node_id] =
+                    Some(ReturnType::Standard(l.clone().into()));
+            }
+            ValueExpression::Identifier(id) | ValueExpression::CallExpression { id, .. } => {
+                if let Some(symbol) = symbol_table.lookup(&id) {
+                    tables.link_table[expression.node_id] = symbol.symbol_id;
+                } else {
+                    return Err(SyntaxError::UseBeforeDefinition(expression.span));
+                }
+            }
+        },
+        ExpressionT::BinOp { left, op, right } => {
+            populate_tables_expression(left.as_ref(), tables, symbol_table)?;
+            populate_tables_expression(right.as_ref(), tables, symbol_table)?;
+        }
+        ExpressionT::UnOp { op, operand } => {
+            populate_tables_expression(&operand, tables, symbol_table)?
+        }
     }
 
     Ok(())

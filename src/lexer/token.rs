@@ -172,3 +172,11 @@ impl DeclarationKeyword {
         }
     }
 }
+
+impl From<Literal> for DeclarationKeyword {
+    fn from(value: Literal) -> Self {
+        match value {
+            Literal::Integer(..) => DeclarationKeyword::Int,
+        }
+    }
+}

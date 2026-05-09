@@ -9,10 +9,14 @@ pub enum StatementT {
     Root {
         statements: Vec<Statement>,
     },
-    Declaration(Declaration),
+    Declaration {
+        identifier: String,
+        keyword: DeclarationKeyword,
+        assignment: Option<Expression>,
+    },
     FunctionDeclaration {
         identifier: String,
-        arguments: Vec<Declaration>,
+        parameters: Vec<Statement>,
         return_type: DeclarationKeyword,
         body: Vec<Statement>,
     },
@@ -31,13 +35,6 @@ pub struct Statement {
     pub stype: StatementT,
     pub span: Span,
     pub node_id: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct Declaration {
-    identifier: String,
-    keyword: DeclarationKeyword,
-    assignment: Option<Expression>,
 }
 
 #[derive(Debug, Clone)]
@@ -78,7 +75,7 @@ enum DeclarationError {
     MissingIdentifier,
 }
 
-fn parse_declaration(state: &mut ParseState) -> Result<(Declaration, Span), StatementError> {
+fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError> {
     let decl_token = state.next();
     let decl = match decl_token.token_type {
         TokenType::Keyword(Keyword::Declaration(decl)) => Ok(decl),
@@ -105,14 +102,16 @@ fn parse_declaration(state: &mut ParseState) -> Result<(Declaration, Span), Stat
         }
     };
     let span = Span::merge(&decl_token.span, &assignment_span.unwrap_or(id_token.span));
-    Ok((
-        Declaration {
+    let statement = Statement {
+        node_id: state.next_id(),
+        stype: StatementT::Declaration {
             identifier: id,
             keyword: decl,
             assignment: assignment,
         },
-        span,
-    ))
+        span: span,
+    };
+    Ok(statement)
 }
 fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementError> {
     // expect the identifier to be the first token.
@@ -145,12 +144,8 @@ fn generate_ast_block(
         let token = state.peek();
         match token.token_type {
             TokenType::Keyword(Keyword::Declaration(_)) => {
-                let (decl, span) = parse_declaration(state)?;
-                block_statements.push(Statement {
-                    stype: StatementT::Declaration(decl),
-                    span: span,
-                    node_id: state.next_id(),
-                });
+                let decl = parse_declaration(state)?;
+                block_statements.push(decl);
                 //expect and consume semicolon.
                 if !matches!(
                     state.next().token_type,
@@ -251,10 +246,15 @@ mod tests {
         if let StatementT::Root { statements } = ast.stype.clone() {
             assert!(statements.len() == 2);
             let decl = &statements[0];
-            assert!(matches!(decl.stype, StatementT::Declaration(_)));
-            if let StatementT::Declaration(d) = &decl.stype {
-                assert_eq!(d.identifier, "a");
-                assert_eq!(d.keyword, DeclarationKeyword::Int);
+            assert!(matches!(decl.stype, StatementT::Declaration { .. }));
+            if let StatementT::Declaration {
+                identifier,
+                keyword,
+                ..
+            } = &decl.stype
+            {
+                assert_eq!(identifier, "a");
+                assert_eq!(*keyword, DeclarationKeyword::Int);
             }
             let ass = &statements[1].stype;
             assert!(matches!(ass, StatementT::Assignment { .. }));
