@@ -156,7 +156,7 @@ fn parse_primary(state: &mut ParseState) -> Expression {
                     expr
                 } else {
                     state.report(
-                        next_token.span,
+                        Span::merge(&expr.span, &next_token.span),
                         ExpressionError::MissingClosingBrace(next_token.token_type),
                     );
                     expr
