@@ -264,7 +264,7 @@ fn populate_link_table(
             symbol_table.pop();
         }
         StatementT::Assignment { identifier, value } => {
-            pop_link_tab_exp(&value, &mut dec_tables.link_table, symbol_table, diag); // expression should also be filled.
+            pop_link_tab_exp(&value, dec_tables, symbol_ctr, symbol_table, diag); // expression should also be filled.
             if let Some(symbol) = symbol_table.lookup(&identifier) {
                 dec_tables.link_table[statement.node_id] = symbol.symbol_id;
             } else {
@@ -288,9 +288,9 @@ fn populate_link_table(
             keyword,
             assignment,
         } => {
-            assignment
-                .as_ref()
-                .map(|a| pop_link_tab_exp(&a, &mut dec_tables.link_table, symbol_table, diag));
+            if let Some(exp) = assignment {
+                pop_link_tab_exp(exp, dec_tables, symbol_ctr, symbol_table, diag);
+            }
             // check assignment FIRST since then we will catch errors for self-referencing in assigment.
             // e.g. int x=  x+1 not allowed.
             // it does not work for global scope since these are added in the first pass.
@@ -300,6 +300,7 @@ fn populate_link_table(
             // to ensure we do not throw error on global defs
             {
                 diag.push(statement.span, SemanticError::AlreadyDefinedInScope);
+                dec_tables.link_table[statement.node_id] = symbol.symbol_id;
             } else {
                 define_symbol(
                     identifier.clone(),
@@ -317,7 +318,8 @@ fn populate_link_table(
                 span: statement.span,
                 node_id: statement.node_id,
             },
-            &mut dec_tables.link_table,
+            dec_tables,
+            symbol_ctr,
             symbol_table,
             diag,
         ),
@@ -340,30 +342,33 @@ fn populate_link_table(
             {
                 //
                 diag.push(statement.span, SemanticError::AlreadyDefinedInScope);
+                dec_tables.link_table[statement.node_id] = symbol.symbol_id;
+            } else {
+                define_symbol(
+                    identifier.clone(),
+                    statement.node_id,
+                    symbol_ctr,
+                    &mut dec_tables.link_table,
+                    symbol_table,
+                );
+                dec_tables.type_table.push(return_type.clone().into());
+                symbol_table.push_empty();
+                for parameter in parameters {
+                    populate_link_table(parameter, dec_tables, symbol_ctr, symbol_table, diag);
+                }
+                for statement in body {
+                    populate_link_table(statement, dec_tables, symbol_ctr, symbol_table, diag);
+                }
+                symbol_table.pop();
             }
-            define_symbol(
-                identifier.clone(),
-                statement.node_id,
-                symbol_ctr,
-                &mut dec_tables.link_table,
-                symbol_table,
-            );
-            dec_tables.type_table.push(return_type.clone().into());
-            symbol_table.push_empty();
-            for parameter in parameters {
-                populate_link_table(parameter, dec_tables, symbol_ctr, symbol_table, diag);
-            }
-            for statement in body {
-                populate_link_table(statement, dec_tables, symbol_ctr, symbol_table, diag);
-            }
-            symbol_table.pop();
         }
     }
 }
 
 fn pop_link_tab_exp(
     expression: &Expression,
-    link_table: &mut Vec<usize>,
+    dec_tables: &mut DecTables,
+    symbol_ctr: &mut Counter,
     symbol_table: &mut SymbolTable,
     diag: &mut Diagnostic,
 ) {
@@ -373,19 +378,21 @@ fn pop_link_tab_exp(
             ValueExpression::Literal(..) => {}
             ValueExpression::Identifier(id) | ValueExpression::CallExpression { id, .. } => {
                 if let Some(symbol) = symbol_table.lookup(&id) {
-                    link_table[expression.node_id] = symbol.symbol_id;
+                    dec_tables.link_table[expression.node_id] = symbol.symbol_id;
                 } else {
                     diag.push(expression.span, SemanticError::UseBeforeDefinition);
+                    dec_tables.link_table[expression.node_id] = symbol_ctr.next_id();
+                    dec_tables.type_table.push(ReturnType::Error);
                     // should we define the symbol here? unclear. probably not.
                 }
             }
         },
         ExpressionT::BinOp { left, op, right } => {
-            pop_link_tab_exp(left.as_ref(), link_table, symbol_table, diag);
-            pop_link_tab_exp(right.as_ref(), link_table, symbol_table, diag);
+            pop_link_tab_exp(left.as_ref(), dec_tables, symbol_ctr, symbol_table, diag);
+            pop_link_tab_exp(right.as_ref(), dec_tables, symbol_ctr, symbol_table, diag);
         }
         ExpressionT::UnOp { op, operand } => {
-            pop_link_tab_exp(&operand, link_table, symbol_table, diag)
+            pop_link_tab_exp(&operand, dec_tables, symbol_ctr, symbol_table, diag)
         }
     }
 }
@@ -433,16 +440,15 @@ mod tests {
     #[test]
     fn test_link_tables_2() {
         let input = "{
-            int a = 5;
-            int b = 4;
             int c = d + 4;
             int d;
             }";
         let mut diag = Diagnostic::new();
         let mut state = ParseState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
-
         let tables: DecTables = get_dec_tables(&root, &mut diag, size);
+        println!("num errors: {}", diag.get_errors().len());
+        diag.print_errors(input);
         type_check_pass(&root, &mut diag, &tables);
         assert_eq!(diag.get_errors().len(), 1);
     }

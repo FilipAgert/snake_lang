@@ -1,3 +1,5 @@
+use std::panic::PanicHookInfo;
+
 use crate::lexer::token::Span;
 use crate::parser::expression::ExpressionError;
 use crate::parser::semantic_analyser::SemanticError;
@@ -62,7 +64,7 @@ pub fn print_error(source: &str, error: &Error) {
     } else {
         format!("{}:{}-{}:{}", line_s, col_s, line_e, col_e)
     };
-    println!("Error at {} : {:?}", line_str, error.error_t);
+    println!("Error at {}: {:?}", line_str, error.error_t);
 }
 
 impl Diagnostic {
@@ -87,5 +89,11 @@ impl Diagnostic {
 
     pub fn get_errors(&self) -> &[Error] {
         &self.errors.as_slice()
+    }
+
+    pub fn print_errors(&self, source: &str) {
+        for error in &self.errors {
+            print_error(source, error);
+        }
     }
 }
