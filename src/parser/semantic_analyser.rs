@@ -170,11 +170,11 @@ fn populate_tables(
             tables.depth_table[statement.node_id] = Some(symbol_table.depth());
             tables.link_table[statement.node_id] = statement.node_id;
             tables.type_table[statement.node_id] = Some((*return_type).into());
+            symbol_table.push_empty();
             for parameter in parameters {
                 populate_tables(parameter, tables, symbol_table)?;
             }
 
-            symbol_table.push_empty();
             for statement in body {
                 populate_tables(statement, tables, symbol_table)?;
             }
