@@ -36,12 +36,17 @@ pub enum TokenType {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
     Integer(i32),
+    Bool(bool),
 }
 
 impl Literal {
     pub fn from_str(str: &str) -> Option<Self> {
         if let Ok(int) = str.parse::<i32>() {
             return Some(Literal::Integer(int));
+        } else if str.eq("true") {
+            return Some(Literal::Bool(true));
+        } else if str.eq("false") {
+            return Some(Literal::Bool(false));
         }
         None
     }
@@ -49,11 +54,11 @@ impl Literal {
 
 impl TokenType {
     pub fn from_str(str: &str) -> Self {
+        if let Some(op) = Operator::from_str(str) {
+            return TokenType::Op(op);
+        }
         if str.len() == 1 {
             let ch = str.chars().next().expect("Already checked length");
-            if let Some(op) = Operator::from_ch(ch) {
-                return TokenType::Op(op);
-            }
             if let Some(symbol) = Symbol::from_ch(ch) {
                 return TokenType::Symbol(symbol);
             }
@@ -78,25 +83,46 @@ pub enum DeclarationKeyword {
     Int,
     Void,
     Error,
+    Bool,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Operator {
-    Plus,   // +
-    Equal,  // =
-    Times,  // *
-    Divide, // /
-    Minus,  // -
+    Plus,       // +
+    Equal,      // =
+    Times,      // *
+    Divide,     // /
+    Minus,      // -
+    Lt,         // <
+    Le,         // <=
+    Gt,         // >
+    Ge,         // >=
+    EqualEqual, // ==
+    Not,        // !
+    And,        // &&
+    Or,         // ||
+    NotEqual,   // !=
+    Xor,        // ^
 }
 
 impl Operator {
-    pub fn from_ch(c: char) -> Option<Operator> {
-        match c {
-            '=' => Some(Operator::Equal),
-            '+' => Some(Operator::Plus),
-            '/' => Some(Operator::Divide),
-            '-' => Some(Operator::Minus),
-            '*' => Some(Operator::Times),
+    pub fn from_str(str: &str) -> Option<Operator> {
+        match str {
+            "=" => Some(Operator::Equal),
+            "+" => Some(Operator::Plus),
+            "/" => Some(Operator::Divide),
+            "-" => Some(Operator::Minus),
+            "*" => Some(Operator::Times),
+            "!" => Some(Operator::Not),
+            "<" => Some(Operator::Lt),
+            "<=" => Some(Operator::Le),
+            ">" => Some(Operator::Gt),
+            ">=" => Some(Operator::Ge),
+            "==" => Some(Operator::EqualEqual),
+            "!=" => Some(Operator::NotEqual),
+            "&&" => Some(Operator::And),
+            "||" => Some(Operator::Or),
+            "^" => Some(Operator::Xor),
             _ => None,
         }
     }
@@ -108,6 +134,11 @@ impl Operator {
             Operator::Minus => 10,
             Operator::Plus => 10,
             Operator::Equal => 0,
+            Operator::Not => 30,
+            Operator::And => 20,
+            Operator::Or | Operator::Xor => 10,
+            Operator::EqualEqual | Operator::NotEqual => 0,
+            Operator::Ge | Operator::Gt | Operator::Le | Operator::Lt => 10,
         }
     }
 }
@@ -175,6 +206,7 @@ impl DeclarationKeyword {
         match s {
             "int" => Some(DeclarationKeyword::Int),
             "void" => Some(DeclarationKeyword::Void),
+            "bool" => Some(DeclarationKeyword::Bool),
             _ => None,
         }
     }
@@ -184,6 +216,7 @@ impl From<Literal> for DeclarationKeyword {
     fn from(value: Literal) -> Self {
         match value {
             Literal::Integer(..) => DeclarationKeyword::Int,
+            Literal::Bool(..) => DeclarationKeyword::Bool,
         }
     }
 }

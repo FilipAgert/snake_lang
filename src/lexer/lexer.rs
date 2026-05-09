@@ -13,7 +13,8 @@ impl TokenStr {
     }
 }
 
-const SPECIAL_SYMBOLS: &'static str = "()[]{};=+-/*,:";
+const SPECIAL_SYMBOLS: &'static str = "()[]{};";
+const OPERATORS: &'static str = "=+-/*,:&|<>!^";
 
 pub fn scan(str: &str) -> Vec<Token> {
     let token_str = seperate_string(str);
@@ -63,6 +64,31 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
                 end: idx + 1,
             };
             strings.push(TokenStr::new(c.to_string(), spec_char_span));
+            curr_start = idx + 1;
+        } else if OPERATORS.contains(c) {
+            if !curr_str.is_empty() {
+                let span = Span {
+                    start: curr_start,
+                    end: idx,
+                };
+                let str_token = TokenStr::new(mem::take(&mut curr_str), span);
+                curr_start = idx;
+                strings.push(str_token);
+            }
+            curr_str.push(c);
+            let mut end = idx + 1;
+            while let Some((idx, c)) = cursor.peek().copied()
+                && OPERATORS.contains(c)
+            {
+                cursor.next();
+                curr_str.push(c);
+                end = idx + 1;
+            }
+            let spec_char_span = Span {
+                start: idx,
+                end: end,
+            };
+            strings.push(TokenStr::new(mem::take(&mut curr_str), spec_char_span));
             curr_start = idx + 1;
         } else if c != ' ' {
             curr_str.push(c);
