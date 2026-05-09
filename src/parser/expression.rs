@@ -181,28 +181,28 @@ mod tests {
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
-        assert!(matches!(expression, Expression::BinOp { .. }));
-        if let Expression::BinOp { left, op, right } = expression {
-            assert!(matches!(*left, Expression::BinOp { .. }));
+        assert!(matches!(expression.etype, ExpressionT::BinOp { .. }));
+        if let ExpressionT::BinOp { left, op, right } = expression.etype {
+            assert!(matches!(left.etype, ExpressionT::BinOp { .. }));
             assert!(matches!(
-                *right,
-                Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(3)))
+                right.etype,
+                ExpressionT::ValueExpression(ValueExpression::Literal(Literal::Integer(3)))
             ));
             assert_eq!(op, Operator::Plus);
 
-            if let Expression::BinOp {
+            if let ExpressionT::BinOp {
                 left: left_inner,
                 op: op_inner,
                 right: right_inner,
-            } = *left
+            } = left.etype
             {
                 assert_eq!(
-                    *left_inner,
-                    Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(15)))
+                    left_inner.etype,
+                    ExpressionT::ValueExpression(ValueExpression::Literal(Literal::Integer(15)))
                 );
                 assert_eq!(
-                    *right_inner,
-                    Expression::ValueExpression(ValueExpression::Identifier("x".to_string()))
+                    right_inner.etype,
+                    ExpressionT::ValueExpression(ValueExpression::Identifier("x".to_string()))
                 );
                 assert_eq!(op_inner, Operator::Times);
             } else {
@@ -219,23 +219,23 @@ mod tests {
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
-        if let Expression::BinOp { left, op, right } = expression {
+        if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Times);
             assert_eq!(
-                *left,
-                Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(10)))
+                left.etype,
+                ExpressionT::ValueExpression(ValueExpression::Literal(Literal::Integer(10)))
             );
 
             // Right side should be the result of the parenthesis: (5 + 3)
-            if let Expression::BinOp { left, op, right } = *right {
+            if let ExpressionT::BinOp { left, op, right } = right.etype {
                 assert_eq!(op, Operator::Plus);
                 assert_eq!(
-                    *left,
-                    Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(5)))
+                    left.etype,
+                    ExpressionT::ValueExpression(ValueExpression::Literal(Literal::Integer(5)))
                 );
                 assert_eq!(
-                    *right,
-                    Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(3)))
+                    right.etype,
+                    ExpressionT::ValueExpression(ValueExpression::Literal(Literal::Integer(3)))
                 );
             } else {
                 panic!("Expected nested BinOp from parenthesis");
@@ -252,23 +252,23 @@ mod tests {
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
-        if let Expression::BinOp { left, op, right } = expression {
+        if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Plus);
             // Right side is the final + 4
             assert_eq!(
-                *right,
-                Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(4)))
+                right.etype,
+                ExpressionT::ValueExpression(ValueExpression::Literal(Literal::Integer(4)))
             );
 
             // Left side is (1 + (2 * 3))
-            if let Expression::BinOp { left, op, right } = *left {
+            if let ExpressionT::BinOp { left, op, right } = left.etype {
                 assert_eq!(op, Operator::Plus);
                 // Verify the multiplication is nested inside this right branch
                 assert_eq!(
-                    *left,
-                    Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(1)))
+                    left.etype,
+                    ExpressionT::ValueExpression(ValueExpression::Literal(Literal::Integer(1)))
                 );
-                assert!(matches!(*right, Expression::BinOp { .. }));
+                assert!(matches!(right.etype, ExpressionT::BinOp { .. }));
             } else {
                 panic!("Should be a binop")
             }
@@ -285,29 +285,29 @@ mod tests {
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
-        if let Expression::BinOp { left, op, right } = expression {
+        if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Times);
             assert!(matches!(
-                *left,
-                Expression::ValueExpression(ValueExpression::CallExpression { .. })
+                left.etype,
+                ExpressionT::ValueExpression(ValueExpression::CallExpression { .. })
             ));
-            if let Expression::ValueExpression(ValueExpression::CallExpression { id, arguments }) =
-                *left
+            if let ExpressionT::ValueExpression(ValueExpression::CallExpression { id, arguments }) =
+                left.etype
             {
                 assert_eq!(id, "my_func");
                 assert_eq!(
-                    arguments[0],
-                    Expression::ValueExpression(ValueExpression::Identifier("a".to_string()))
+                    arguments[0].etype,
+                    ExpressionT::ValueExpression(ValueExpression::Identifier("a".to_string()))
                 );
                 assert_eq!(
-                    arguments[1],
-                    Expression::ValueExpression(ValueExpression::Identifier("b".to_string()))
+                    arguments[1].etype,
+                    ExpressionT::ValueExpression(ValueExpression::Identifier("b".to_string()))
                 );
                 assert_eq!(arguments.len(), 2);
             }
             assert_eq!(
-                *right,
-                Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(2)))
+                right.etype,
+                ExpressionT::ValueExpression(ValueExpression::Literal(Literal::Integer(2)))
             );
         } else {
             panic!("should be a binary expression")
@@ -321,8 +321,8 @@ mod tests {
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
         assert_eq!(
-            expression,
-            Expression::ValueExpression(ValueExpression::Literal(Literal::Integer(10)))
+            expression.etype,
+            ExpressionT::ValueExpression(ValueExpression::Literal(Literal::Integer(10)))
         );
     }
 
@@ -333,9 +333,9 @@ mod tests {
         let mut tokens = scan(input);
         let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
 
-        if let Expression::BinOp { left, op, right } = expression {
+        if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Minus);
-            if let Expression::BinOp { left, op, right } = *left {
+            if let ExpressionT::BinOp { left, op, right } = left.etype {
                 assert_eq!(op, Operator::Divide);
             } else {
                 panic!("Division should be on the left branch");
