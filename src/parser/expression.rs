@@ -40,11 +40,8 @@ pub enum ExpressionT {
 
 #[derive(Debug, Clone)]
 pub enum ExpressionError {
-    IncompatibleTypes,
-    InvalidExpressionToken,
     MissingOperand,
     OperandOnLhsError,
-    UnimplementedError,
     UnexpectedKeyword,
     UnexpectedSymbol,
     UnexpectedEOF,

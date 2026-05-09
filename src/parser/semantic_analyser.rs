@@ -1,6 +1,8 @@
 use crate::parser::statement::*;
 
-enum SyntaxError {}
+enum SyntaxError {
+    IncompatibleTypes,
+}
 pub fn analyze_statement(statement: &Statement) -> Result<(), SyntaxError> {
     match &statement.stype {
         StatementT::Root { statements } => (),

@@ -40,7 +40,6 @@ pub struct Declaration {
 #[derive(Debug, Clone)]
 enum StatementError {
     ExpressionError(ExpressionError),
-    UnimplementedError,
     UnexpectedEOF,
     UnexpectedToken,
     DeclarationError(DeclarationError),
@@ -73,8 +72,6 @@ impl From<Expression> for Statement {
 enum DeclarationError {
     MissingDeclarationKeyword,
     MissingIdentifier,
-    MissingSemicolon,
-    UnexpectedToken,
 }
 
 fn parse_declaration(
