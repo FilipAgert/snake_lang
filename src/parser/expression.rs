@@ -165,8 +165,6 @@ pub fn parse_expression(
                 },
                 node_id: state.next_id(),
             };
-        } else if token_type == TokenType::EOF {
-            return Err(ExpressionError::UnexpectedEOF);
         } else {
             break;
         }
