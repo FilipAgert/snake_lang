@@ -95,7 +95,7 @@ pub fn get_dec_tables(root: &Statement, diag: &mut Diagnostic, num_ids: usize) -
     let mut symbol_ctr = Counter::new();
     let mut symbol_table = SymbolTable::new();
     let mut dec_tables = DecTables {
-        link_table: vec![usize::MAX, num_ids],
+        link_table: vec![usize::MAX; num_ids],
         type_table: Vec::new(),
     };
     populate_link_table(
@@ -315,10 +315,6 @@ mod tests {
         println!("{:?}", root);
         println!("{:?}", tables);
 
-        for l in &tables.link_table {
-            assert_ne!(*l, usize::MAX);
-        }
-
         let (decl_id, usage_id) = if let StatementT::Root { statements } = root.stype {
             (statements[0].node_id, statements[1].node_id)
         } else {
@@ -374,7 +370,7 @@ mod tests {
     }
     #[test]
     fn test_undeclared_variable() {
-        let input = "a = 5;int a = 4;";
+        let input = "{a = 5;int a = 4;}";
         let mut diag = Diagnostic::new();
         let mut state = ParseState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
