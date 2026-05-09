@@ -4,4 +4,9 @@
     x = 4;
     int c = d - x + 4;
     int d;
+
+    bool eft = true;
+    bool bla = false;
+    bool res = eft && bla;
+    int hej = eft * (c*a);
 }

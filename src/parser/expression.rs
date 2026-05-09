@@ -146,12 +146,13 @@ fn parse_primary(state: &mut ParseState) -> Expression {
         }
         TokenType::Symbol(s) => match s {
             Symbol::Bracket(Bracket::Parenthesis(Side::Left)) => {
-                let expr = parse_expression(state, 0);
+                let mut expr = parse_expression(state, 0);
                 let next = state.peek();
                 if next.token_type
                     == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right)))
                 {
-                    state.next();
+                    let closing = state.next();
+                    expr.span = Span::merge(&expr.span, &closing.span);
                     expr
                 } else {
                     state.report(
