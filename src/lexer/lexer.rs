@@ -66,6 +66,8 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
             curr_start = idx + 1;
         } else if c != ' ' {
             curr_str.push(c);
+        } else if c == ' ' {
+            curr_start = idx;
         }
     }
     if !curr_str.is_empty() {
