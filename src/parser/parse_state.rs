@@ -40,6 +40,19 @@ impl ParseState {
             counter: NodeCounter::new(),
         }
     }
+
+    // If we have an error, this iterates the tokens until we hit (but do not consume) a recovery token.
+    // This could e.g. be a semicolon or closing brace.
+    pub fn synchronize_to(&mut self, recovery_tokens: &[TokenType]) {
+        while let token = self.peek()
+            && token.token_type != TokenType::EOF
+        {
+            if recovery_tokens.contains(&token.token_type) {
+                return;
+            }
+            self.next();
+        }
+    }
 }
 
 struct NodeCounter {
