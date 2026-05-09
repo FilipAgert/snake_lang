@@ -76,37 +76,57 @@ enum DeclarationError {
 }
 
 fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError> {
-    let decl_token = state.next();
-    let decl = match decl_token.token_type {
-        TokenType::Keyword(Keyword::Declaration(decl)) => Ok(decl),
-        _ => Err(DeclarationError::MissingDeclarationKeyword),
-    }?;
-    let id_token = state.next();
-    let id = match &id_token.token_type {
-        TokenType::Identifier(id) => Ok(id.clone()),
-        _ => Err(DeclarationError::MissingIdentifier),
-    }?;
+    let peeked_token = state.peek();
+    let (declaration_token, declaration_value) = match peeked_token.token_type {
+        TokenType::Keyword(Keyword::Declaration(decl)) => (Some(state.next()), Some(decl)),
+        _ => {
+            state.report::<StatementError>(
+                peeked_token.span,
+                DeclarationError::MissingDeclarationKeyword.into(),
+            );
+            (None, None)
+        }
+    };
+    let declaration_span = declaration_token.map(|d| d.span);
+
+    let peeked_token = state.peek();
+    let (id, id_span) = match peeked_token.token_type.clone() {
+        TokenType::Identifier(id) => {
+            let token = state.next();
+            (id, token.span)
+        }
+        _ => {
+            state.report::<StatementError>(
+                peeked_token.span,
+                DeclarationError::MissingIdentifier.into(),
+            );
+            return Err(DeclarationError::MissingIdentifier.into());
+        }
+    };
 
     let assignment_token = state.peek();
-    let mut assignment_span = None;
     let assignment: Option<Expression> = match assignment_token.token_type {
         TokenType::Symbol(Symbol::Semicolon | Symbol::Comma) => None, //
         TokenType::Op(Operator::Equal) => {
             state.next(); // Consume equal
-            let assignment_expr = parse_expression(state, 0)?;
-            assignment_span = Some(assignment_expr.span);
+            let assignment_expr = parse_expression(state, 0);
+
             Some(assignment_expr)
         }
         _ => {
             return Err(StatementError::UnexpectedToken);
         }
     };
-    let span = Span::merge(&decl_token.span, &assignment_span.unwrap_or(id_token.span));
+    let span = Span::merge(
+        &declaration_span.unwrap_or(id_span),
+        &assignment.clone().map(|a| a.span).unwrap_or(id_span),
+    );
+
     let statement = Statement {
         node_id: state.next_id(),
         stype: StatementT::Declaration {
             identifier: id,
-            keyword: decl,
+            keyword: declaration_value.unwrap_or(DeclarationKeyword::Error),
             assignment: assignment,
         },
         span: span,

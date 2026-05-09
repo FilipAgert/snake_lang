@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub span: Span,
@@ -14,6 +14,12 @@ impl Span {
         let start = s1.start.min(s2.start);
         let end = s1.end.max(s2.end);
         Self { start, end }
+    }
+    pub const fn min_info() -> Self {
+        Self {
+            start: usize::MAX,
+            end: usize::MIN,
+        }
     }
 }
 
@@ -71,6 +77,7 @@ pub enum Keyword {
 pub enum DeclarationKeyword {
     Int,
     Void,
+    Error,
 }
 
 #[derive(Debug, PartialEq, Clone)]

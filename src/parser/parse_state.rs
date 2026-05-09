@@ -7,27 +7,21 @@ pub struct ParseState<'a> {
     counter: NodeCounter,
     diag: &'a mut Diagnostic,
 }
-
+static EOF_TOKEN: Token = Token {
+    token_type: TokenType::EOF,
+    span: Span::min_info(),
+};
 impl<'a> ParseState<'a> {
     pub fn peek(&self) -> &Token {
-        self.tokens.front().unwrap_or(&Token {
-            token_type: TokenType::EOF,
-            span: Span { start: 0, end: 1 },
-        })
+        self.tokens.front().unwrap_or(&EOF_TOKEN)
     }
 
     pub fn peek_at(&self, offset: usize) -> &Token {
-        self.tokens.get(offset).unwrap_or(&Token {
-            token_type: TokenType::EOF,
-            span: Span { start: 0, end: 1 },
-        })
+        self.tokens.get(offset).unwrap_or(&EOF_TOKEN)
     }
 
     pub fn next(&mut self) -> Token {
-        let token = self.tokens.pop_front().unwrap_or(Token {
-            token_type: TokenType::EOF,
-            span: Span { start: 0, end: 1 },
-        });
+        let token = self.tokens.pop_front().unwrap_or(EOF_TOKEN.clone());
         token
     }
 
@@ -63,7 +57,6 @@ impl<'a> ParseState<'a> {
         }
     }
 }
-
 struct NodeCounter {
     next_id: usize,
 }
