@@ -1,3 +1,4 @@
+use core::num;
 use std::any::Any;
 use std::{collections::HashMap, hash::Hash};
 
@@ -85,35 +86,27 @@ impl SymbolTable {
 }
 
 #[derive(Debug)]
-struct SymTables {
+struct DecTables {
     link_table: Vec<usize>,
-    type_table: Vec<Option<ReturnType>>,
+    type_table: Vec<ReturnType>,
 }
 
-impl SymTables {
-    fn new(num_ids: usize) -> Self {
-        Self {
-            link_table: vec![usize::MAX; num_ids],
-            type_table: vec![None; num_ids],
-        }
-    }
-}
-
-pub fn get_tables(root: &Statement, diag: &mut Diagnostic, num_ids: usize) -> SymTables {
-    let mut link_table = vec![usize::MAX, num_ids];
-    let mut type_table = Vec::new();
+pub fn get_dec_tables(root: &Statement, diag: &mut Diagnostic, num_ids: usize) -> DecTables {
     let mut symbol_ctr = Counter::new();
     let mut symbol_table = SymbolTable::new();
+    let mut dec_tables = DecTables {
+        link_table: vec![usize::MAX, num_ids],
+        type_table: Vec::new(),
+    };
     populate_link_table(
         root,
-        &mut link_table,
+        &mut dec_tables,
         &mut symbol_ctr,
-        &mut type_table,
         &mut symbol_table,
         diag,
     );
-    assert_eq!(symbol_ctr.num_allocated(), type_table.len());
-    tables
+    assert_eq!(symbol_ctr.num_allocated(), dec_tables.type_table.len());
+    dec_tables
 }
 
 fn define_symbol(
@@ -132,9 +125,8 @@ fn define_symbol(
 // Defines all links and types of all declarations.
 fn populate_link_table(
     statement: &Statement,
-    link_table: &mut Vec<usize>,
+    dec_tables: &mut DecTables,
     symbol_ctr: &mut Counter,
-    type_table: &mut Vec<ReturnType>,
     symbol_table: &mut SymbolTable,
     diag: &mut Diagnostic,
 ) {
@@ -158,31 +150,24 @@ fn populate_link_table(
                             identifier.clone(),
                             statement.node_id,
                             symbol_ctr,
-                            link_table,
+                            &mut dec_tables.link_table,
                             symbol_table,
                         );
-                        type_table.push(id_type.clone().into());
+                        dec_tables.type_table.push(id_type.clone().into());
                     }
                     _ => (),
                 }
             }
 
             for statement in statements {
-                populate_link_table(
-                    statement,
-                    link_table,
-                    symbol_ctr,
-                    type_table,
-                    symbol_table,
-                    diag,
-                );
+                populate_link_table(statement, dec_tables, symbol_ctr, symbol_table, diag);
             }
             symbol_table.pop();
         }
         StatementT::Assignment { identifier, value } => {
-            pop_link_tab_exp(&value, link_table, symbol_table, diag); // expression should also be filled.
+            pop_link_tab_exp(&value, &mut dec_tables.link_table, symbol_table, diag); // expression should also be filled.
             if let Some(symbol) = symbol_table.lookup(&identifier) {
-                link_table[statement.node_id] = symbol.symbol_id;
+                dec_tables.link_table[statement.node_id] = symbol.symbol_id;
             } else {
                 // this branch is to minimize errors later.
                 // we define x even though its not a good assignment.
@@ -190,10 +175,12 @@ fn populate_link_table(
                     identifier.clone(),
                     statement.node_id,
                     symbol_ctr,
-                    link_table,
+                    &mut dec_tables.link_table,
                     symbol_table,
                 );
-                type_table.push(ReturnType::Standard(DeclarationKeyword::Error));
+                dec_tables
+                    .type_table
+                    .push(ReturnType::Standard(DeclarationKeyword::Error));
                 diag.push(statement.span, SemanticError::UseBeforeDefinition);
             }
         }
@@ -204,7 +191,7 @@ fn populate_link_table(
         } => {
             assignment
                 .as_ref()
-                .map(|a| pop_link_tab_exp(&a, link_table, symbol_table, diag));
+                .map(|a| pop_link_tab_exp(&a, &mut dec_tables.link_table, symbol_table, diag));
             // check assignment FIRST since then we will catch errors for self-referencing in assigment.
             // e.g. int x=  x+1 not allowed.
             // it does not work for global scope since these are added in the first pass.
@@ -219,10 +206,10 @@ fn populate_link_table(
                     identifier.clone(),
                     statement.node_id,
                     symbol_ctr,
-                    link_table,
+                    &mut dec_tables.link_table,
                     symbol_table,
                 );
-                type_table.push(keyword.clone().into());
+                dec_tables.type_table.push(keyword.clone().into());
             }
         }
         StatementT::ExpressionStatement(expr) => pop_link_tab_exp(
@@ -231,21 +218,14 @@ fn populate_link_table(
                 span: statement.span,
                 node_id: statement.node_id,
             },
-            link_table,
+            &mut dec_tables.link_table,
             symbol_table,
             diag,
         ),
         StatementT::Block { statements } => {
             symbol_table.push_empty();
             for statement in statements {
-                populate_link_table(
-                    statement,
-                    link_table,
-                    symbol_ctr,
-                    type_table,
-                    symbol_table,
-                    diag,
-                )
+                populate_link_table(statement, dec_tables, symbol_ctr, symbol_table, diag)
             }
             symbol_table.pop();
         }
@@ -266,30 +246,16 @@ fn populate_link_table(
                 identifier.clone(),
                 statement.node_id,
                 symbol_ctr,
-                link_table,
+                &mut dec_tables.link_table,
                 symbol_table,
             );
-            type_table.push(return_type.clone().into());
+            dec_tables.type_table.push(return_type.clone().into());
             symbol_table.push_empty();
             for parameter in parameters {
-                populate_link_table(
-                    parameter,
-                    link_table,
-                    symbol_ctr,
-                    type_table,
-                    symbol_table,
-                    diag,
-                );
+                populate_link_table(parameter, dec_tables, symbol_ctr, symbol_table, diag);
             }
             for statement in body {
-                populate_link_table(
-                    statement,
-                    link_table,
-                    symbol_ctr,
-                    type_table,
-                    symbol_table,
-                    diag,
-                );
+                populate_link_table(statement, dec_tables, symbol_ctr, symbol_table, diag);
             }
             symbol_table.pop();
         }
@@ -344,7 +310,7 @@ mod tests {
         let mut state = ParseState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
 
-        let tables: SymTables = get_tables(&root, &mut diag, size);
+        let tables: DecTables = get_dec_tables(&root, &mut diag, size);
 
         println!("{:?}", root);
         println!("{:?}", tables);
@@ -377,7 +343,7 @@ mod tests {
         let mut state = ParseState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
 
-        let tables: SymTables = get_tables(&root, &mut diag, size);
+        let tables: DecTables = get_dec_tables(&root, &mut diag, size);
 
         if let StatementT::Root { statements } = root.stype {
             let global_decl_id = statements[0].node_id;
@@ -415,7 +381,7 @@ mod tests {
 
         // Depending on your implementation, this should return an Err
         // or the link_table entry should remain usize::MAX
-        let result = get_tables(&root, &mut diag, size);
+        let result = get_dec_tables(&root, &mut diag, size);
         assert!(diag.has_errors());
         let err = &diag.get_errors()[0];
         match err.error_t {
