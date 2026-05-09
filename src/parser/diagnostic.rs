@@ -34,6 +34,37 @@ pub struct Diagnostic {
     errors: Vec<Error>,
 }
 
+fn get_line_col(source: &str, index: usize) -> (usize, usize) {
+    let mut line = 1;
+    let mut col = 1;
+
+    for (i, c) in source.char_indices() {
+        if i >= index {
+            break;
+        }
+
+        if c == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
+}
+
+pub fn print_error(source: &str, error: &Error) {
+    let (line_s, col_s) = get_line_col(source, error.span.start);
+    let (line_e, col_e) = get_line_col(source, error.span.end);
+
+    let line_str = if line_s == line_e {
+        format!("{}:{}-{}", line_s, col_s, col_e)
+    } else {
+        format!("{}:{}-{}:{}", line_s, col_s, line_e, col_e)
+    };
+    println!("Error at {} : {:?}", line_str, error.error_t);
+}
+
 impl Diagnostic {
     pub fn new() -> Self {
         Self { errors: Vec::new() }

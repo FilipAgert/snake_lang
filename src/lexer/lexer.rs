@@ -1,5 +1,4 @@
 use crate::lexer::token::{Span, Token, TokenType};
-use std::iter::Peekable;
 use std::mem;
 use std::string::String;
 

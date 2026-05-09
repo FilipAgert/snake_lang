@@ -91,7 +91,7 @@ impl SymbolTable {
 }
 
 #[derive(Debug)]
-struct DecTables {
+pub struct DecTables {
     link_table: Vec<usize>,
     type_table: Vec<ReturnType>,
 }
@@ -167,7 +167,7 @@ fn type_check_pass_expr(
                 dec_tables.type_table[dec_tables.link_table[expr.node_id]].clone()
             }
         },
-        ExpressionT::BinOp { left, op, right } => {
+        ExpressionT::BinOp { left, op: _, right } => {
             let left_type = type_check_pass_expr(&left, diag, dec_tables);
             let right_type = type_check_pass_expr(&right, diag, dec_tables);
 
