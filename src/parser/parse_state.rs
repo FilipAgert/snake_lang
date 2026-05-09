@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 pub struct ParseState<'a> {
     tokens: VecDeque<Token>,
-    counter: NodeCounter,
+    counter: Counter,
     diag: &'a mut Diagnostic,
 }
 static EOF_TOKEN: Token = Token {
@@ -32,7 +32,7 @@ impl<'a> ParseState<'a> {
     pub fn new(tokens: Vec<Token>, diag: &'a mut Diagnostic) -> Self {
         Self {
             tokens: tokens.into(),
-            counter: NodeCounter::new(),
+            counter: Counter::new(),
             diag: diag,
         }
     }
@@ -57,18 +57,22 @@ impl<'a> ParseState<'a> {
         }
     }
 }
-struct NodeCounter {
+pub struct Counter {
     next_id: usize,
 }
 
-impl NodeCounter {
-    fn next_id(self: &mut Self) -> usize {
+impl Counter {
+    pub fn next_id(self: &mut Self) -> usize {
         let this = self.next_id;
         self.next_id += 1;
         this
     }
 
-    fn new() -> Self {
-        NodeCounter { next_id: 0 }
+    pub fn num_allocated(&self) -> usize {
+        self.next_id
+    }
+
+    pub fn new() -> Self {
+        Counter { next_id: 0 }
     }
 }

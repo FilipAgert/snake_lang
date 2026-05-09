@@ -2,6 +2,7 @@ use std::any::Any;
 use std::{collections::HashMap, hash::Hash};
 
 use crate::parser::diagnostic::Diagnostic;
+use crate::parser::parse_state::Counter;
 use crate::{
     lexer::token::{DeclarationKeyword, Literal, Span},
     parser::{
@@ -99,47 +100,82 @@ impl SymTables {
 }
 
 pub fn get_tables(root: &Statement, diag: &mut Diagnostic, num_ids: usize) -> SymTables {
-    let mut tables = SymTables::new(num_ids);
+    let mut link_table = vec![usize::MAX, num_ids];
+    let mut type_table = Vec::new();
+    let mut symbol_ctr = Counter::new();
     let mut symbol_table = SymbolTable::new();
-    populate_link_table(root, &mut tables.link_table, &mut symbol_table, diag);
+    populate_link_table(
+        root,
+        &mut link_table,
+        &mut symbol_ctr,
+        &mut type_table,
+        &mut symbol_table,
+        diag,
+    );
+    assert_eq!(symbol_ctr.num_allocated(), type_table.len());
     tables
 }
 
-fn populate_type_table(
-    statement: &Statement,
-    type_table: &mut Vec<Option<ReturnType>>,
+fn define_symbol(
+    id: String,
+    node_id: usize,
+    symbol_ctr: &mut Counter,
+    link_table: &mut Vec<usize>,
     symbol_table: &mut SymbolTable,
-    diag: &mut Diagnostic,
 ) {
-    match &statement.stype {
-        StatementT::Root { statements }
-    }
+    let symbol_id = symbol_ctr.next_id();
+    symbol_table.define(id, symbol_id);
+    link_table[node_id] = symbol_id;
 }
 
+// first pass of compiler through AST.
+// Defines all links and types of all declarations.
 fn populate_link_table(
     statement: &Statement,
     link_table: &mut Vec<usize>,
+    symbol_ctr: &mut Counter,
+    type_table: &mut Vec<ReturnType>,
     symbol_table: &mut SymbolTable,
     diag: &mut Diagnostic,
 ) {
     match &statement.stype {
         StatementT::Root { statements } => {
-            link_table[statement.node_id] = statement.node_id;
             // we need to first forward declare all functions and global variables.
             symbol_table.push_empty();
             for statement in statements {
                 match &statement.stype {
-                    StatementT::Declaration { identifier, .. }
-                    | StatementT::FunctionDeclaration { identifier, .. } => {
-                        symbol_table.define(identifier.clone(), statement.node_id);
-                        link_table[statement.node_id] = statement.node_id;
+                    StatementT::Declaration {
+                        identifier,
+                        keyword: id_type,
+                        ..
+                    }
+                    | StatementT::FunctionDeclaration {
+                        identifier,
+                        return_type: id_type,
+                        ..
+                    } => {
+                        define_symbol(
+                            identifier.clone(),
+                            statement.node_id,
+                            symbol_ctr,
+                            link_table,
+                            symbol_table,
+                        );
+                        type_table.push(id_type.clone().into());
                     }
                     _ => (),
                 }
             }
 
             for statement in statements {
-                populate_link_table(statement, link_table, symbol_table, diag);
+                populate_link_table(
+                    statement,
+                    link_table,
+                    symbol_ctr,
+                    type_table,
+                    symbol_table,
+                    diag,
+                );
             }
             symbol_table.pop();
         }
@@ -148,8 +184,16 @@ fn populate_link_table(
             if let Some(symbol) = symbol_table.lookup(&identifier) {
                 link_table[statement.node_id] = symbol.symbol_id;
             } else {
-                symbol_table.define(identifier.clone(), statement.node_id);
-                link_table[statement.node_id] = statement.node_id;
+                // this branch is to minimize errors later.
+                // we define x even though its not a good assignment.
+                define_symbol(
+                    identifier.clone(),
+                    statement.node_id,
+                    symbol_ctr,
+                    link_table,
+                    symbol_table,
+                );
+                type_table.push(ReturnType::Standard(DeclarationKeyword::Error));
                 diag.push(statement.span, SemanticError::UseBeforeDefinition);
             }
         }
@@ -171,8 +215,14 @@ fn populate_link_table(
             {
                 diag.push(statement.span, SemanticError::AlreadyDefinedInScope);
             } else {
-                symbol_table.define(identifier.clone(), statement.node_id);
-                link_table[statement.node_id] = statement.node_id;
+                define_symbol(
+                    identifier.clone(),
+                    statement.node_id,
+                    symbol_ctr,
+                    link_table,
+                    symbol_table,
+                );
+                type_table.push(keyword.clone().into());
             }
         }
         StatementT::ExpressionStatement(expr) => pop_link_tab_exp(
@@ -186,10 +236,16 @@ fn populate_link_table(
             diag,
         ),
         StatementT::Block { statements } => {
-            link_table[statement.node_id] = statement.node_id;
             symbol_table.push_empty();
             for statement in statements {
-                populate_link_table(statement, link_table, symbol_table, diag)
+                populate_link_table(
+                    statement,
+                    link_table,
+                    symbol_ctr,
+                    type_table,
+                    symbol_table,
+                    diag,
+                )
             }
             symbol_table.pop();
         }
@@ -206,14 +262,34 @@ fn populate_link_table(
                 //
                 diag.push(statement.span, SemanticError::AlreadyDefinedInScope);
             }
-
-            link_table[statement.node_id] = statement.node_id;
+            define_symbol(
+                identifier.clone(),
+                statement.node_id,
+                symbol_ctr,
+                link_table,
+                symbol_table,
+            );
+            type_table.push(return_type.clone().into());
             symbol_table.push_empty();
             for parameter in parameters {
-                populate_link_table(parameter, link_table, symbol_table, diag);
+                populate_link_table(
+                    parameter,
+                    link_table,
+                    symbol_ctr,
+                    type_table,
+                    symbol_table,
+                    diag,
+                );
             }
             for statement in body {
-                populate_link_table(statement, link_table, symbol_table, diag);
+                populate_link_table(
+                    statement,
+                    link_table,
+                    symbol_ctr,
+                    type_table,
+                    symbol_table,
+                    diag,
+                );
             }
             symbol_table.pop();
         }
@@ -227,16 +303,15 @@ fn pop_link_tab_exp(
     diag: &mut Diagnostic,
 ) {
     match &expression.etype {
+        ExpressionT::Error => {}
         ExpressionT::ValueExpression(val) => match val {
-            ValueExpression::Literal(..) => {
-                link_table[expression.node_id] = expression.node_id;
-            }
+            ValueExpression::Literal(..) => {}
             ValueExpression::Identifier(id) | ValueExpression::CallExpression { id, .. } => {
                 if let Some(symbol) = symbol_table.lookup(&id) {
                     link_table[expression.node_id] = symbol.symbol_id;
                 } else {
-                    link_table[expression.node_id] = expression.node_id;
                     diag.push(expression.span, SemanticError::UseBeforeDefinition);
+                    // should we define the symbol here? unclear. probably not.
                 }
             }
         },
@@ -246,9 +321,6 @@ fn pop_link_tab_exp(
         }
         ExpressionT::UnOp { op, operand } => {
             pop_link_tab_exp(&operand, link_table, symbol_table, diag)
-        }
-        ExpressionT::Error => {
-            link_table[expression.node_id] = expression.node_id;
         }
     }
 }
