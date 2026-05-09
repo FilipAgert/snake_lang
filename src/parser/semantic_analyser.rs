@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::{collections::HashMap, hash::Hash};
 
 use crate::parser::diagnostic::Diagnostic;
@@ -40,6 +41,7 @@ struct SymbolTable {
 }
 
 impl SymbolTable {
+    pub const GLOBAL_SCOPE_DEPTH: usize = 1;
     fn define(self: &mut Self, id: String, node_id: usize) {
         let depth = self.depth();
         if let Some(current_scope) = self.scopes.last_mut() {
@@ -103,6 +105,17 @@ pub fn get_tables(root: &Statement, diag: &mut Diagnostic, num_ids: usize) -> Sy
     tables
 }
 
+fn populate_type_table(
+    statement: &Statement,
+    type_table: &mut Vec<Option<ReturnType>>,
+    symbol_table: &mut SymbolTable,
+    diag: &mut Diagnostic,
+) {
+    match &statement.stype {
+        StatementT::Root { statements }
+    }
+}
+
 fn populate_link_table(
     statement: &Statement,
     link_table: &mut Vec<usize>,
@@ -112,9 +125,23 @@ fn populate_link_table(
     match &statement.stype {
         StatementT::Root { statements } => {
             link_table[statement.node_id] = statement.node_id;
+            // we need to first forward declare all functions and global variables.
+            symbol_table.push_empty();
+            for statement in statements {
+                match &statement.stype {
+                    StatementT::Declaration { identifier, .. }
+                    | StatementT::FunctionDeclaration { identifier, .. } => {
+                        symbol_table.define(identifier.clone(), statement.node_id);
+                        link_table[statement.node_id] = statement.node_id;
+                    }
+                    _ => (),
+                }
+            }
+
             for statement in statements {
                 populate_link_table(statement, link_table, symbol_table, diag);
             }
+            symbol_table.pop();
         }
         StatementT::Assignment { identifier, value } => {
             pop_link_tab_exp(&value, link_table, symbol_table, diag); // expression should also be filled.
@@ -133,6 +160,8 @@ fn populate_link_table(
         } => {
             if let Some(symbol) = symbol_table.lookup(identifier)
                 && symbol.depth == symbol_table.depth()
+                && symbol.depth > SymbolTable::GLOBAL_SCOPE_DEPTH
+            // to ensure we do not throw error on global defs
             {
                 diag.push(statement.span, SemanticError::AlreadyDefinedInScope);
             } else {
@@ -169,9 +198,12 @@ fn populate_link_table(
         } => {
             if let Some(symbol) = symbol_table.lookup(identifier)
                 && symbol.depth == symbol_table.depth()
+                && symbol.depth > SymbolTable::GLOBAL_SCOPE_DEPTH
             {
+                //
                 diag.push(statement.span, SemanticError::AlreadyDefinedInScope);
             }
+
             link_table[statement.node_id] = statement.node_id;
             symbol_table.push_empty();
             for parameter in parameters {
