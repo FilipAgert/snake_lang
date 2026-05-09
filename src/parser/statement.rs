@@ -275,8 +275,9 @@ mod tests {
         let input = "int a; a = 15*x+3;";
         let mut diag = Diagnostic::new();
         let mut state = ParseState::new(scan(input), &mut diag);
-        let expression = parse_expression(&mut state, 0);
         let (ast, _) = generate_ast(&mut state).unwrap();
+        println!("{:?}", diag.get_errors());
+        assert_eq!(diag.get_errors().len(), 0);
         assert!(matches!(ast.stype, StatementT::Root { statements: _ }));
         if let StatementT::Root { statements } = ast.stype.clone() {
             assert!(statements.len() == 2);

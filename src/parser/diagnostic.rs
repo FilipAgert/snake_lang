@@ -2,6 +2,7 @@ use crate::lexer::token::Span;
 use crate::parser::expression::ExpressionError;
 use crate::parser::semantic_analyser::SemanticError;
 use crate::parser::statement::StatementError;
+#[derive(Debug)]
 pub enum ErrorT {
     SemanticError(SemanticError),
     StatementError(StatementError),
@@ -22,10 +23,13 @@ impl From<ExpressionError> for ErrorT {
         Self::ExpressionError(value)
     }
 }
+#[derive(Debug)]
 pub struct Error {
     pub error_t: ErrorT,
     pub span: Span,
 }
+
+#[derive(Debug)]
 pub struct Diagnostic {
     errors: Vec<Error>,
 }
