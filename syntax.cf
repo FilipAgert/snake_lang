@@ -1,6 +1,7 @@
 {
     int a = 5;
     int b = 4;
-    int c = d + 4;
+    x = 4;
+    int c = d - x + 4;
     int d;
 }

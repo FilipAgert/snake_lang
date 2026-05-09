@@ -41,7 +41,7 @@ fn get_line_col(source: &str, index: usize) -> (usize, usize) {
     let mut col = 1;
 
     for (i, c) in source.char_indices() {
-        if i >= index {
+        if i > index {
             break;
         }
 
@@ -56,29 +56,29 @@ fn get_line_col(source: &str, index: usize) -> (usize, usize) {
 }
 
 pub fn print_error(source: &str, error: &Error) {
-    let (line_s, col_s) = get_line_col(source, error.span.start);
-    let (line_e, col_e) = get_line_col(source, error.span.end);
-
-    // 1. Find the start and end of the line containing the error
-    let line_start = source[..error.span.start]
-        .rfind('\n')
-        .map(|idx| idx + 1)
-        .unwrap_or(0);
-    let line_end = source[error.span.start..]
-        .find('\n')
-        .map(|idx| idx + error.span.start)
-        .unwrap_or(source.len());
-
-    let full_line = &source[line_start..line_end];
-
-    // 2. Split the line into three parts: before, error, after
-    let before = &source[line_start..error.span.start];
-    let highlight = &source[error.span.start..error.span.end];
-    let after = &source[error.span.end..line_end];
-
-    // 3. Print the error header
+    let start = error.span.start;
+    let end = error.span.end;
+    let (line_s, col_s) = get_line_col(source, start);
+    let (line_e, col_e) = get_line_col(source, end);
     println!("\x1b[1;31mError:\x1b[0m {:?}", error.error_t);
     println!("  --> line {}:{}", line_s, col_s);
+
+    // 1. Find the start of the line (look backward from error start)
+    let line_start = source[..start].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+
+    // 2. Find the end of the line (look forward from error start)
+    // Add 'start' because find() returns the offset from the beginning of the slice
+    let line_end = source[start..]
+        .find('\n')
+        .map(|idx| idx + start)
+        .unwrap_or(source.len());
+
+    // 3. Extract the segments
+    let before = &source[line_start..start];
+    let highlight = &source[start..end];
+    let after = &source[end..line_end];
+
+    // 3. Print the error header
 
     // 4. Print the highlighted line
     // Use | as a margin character
