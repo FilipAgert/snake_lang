@@ -245,6 +245,7 @@ mod tests {
 
         let tables: SymTables = get_tables(&root, size).expect("Generated syntax error");
 
+        println!("{:?}", root);
         println!("{:?}", tables);
 
         for l in &tables.link_table {

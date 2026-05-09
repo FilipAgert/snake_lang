@@ -165,26 +165,27 @@ fn generate_ast_block(
             }
             TokenType::Identifier(_) => {
                 // This must be an expression. If it is a binop expression with operator =, turn it into an assignment.
-                let expr = parse_expression(state, -1)?;
-                if let ExpressionT::BinOp { left, op, right } = expr.clone().etype
-                    && op == Operator::Equal
+                if let TokenType::Op(op) = &state.peek_at(1).token_type
+                    && *op == Operator::Equal
                 {
-                    if let ExpressionT::ValueExpression(ValueExpression::Identifier(id)) =
-                        left.etype
-                    {
-                        block_statements.push(Statement {
-                            stype: StatementT::Assignment {
-                                identifier: id,
-                                value: *right.clone(),
-                            },
-                            span: Span::merge(&left.span, &right.span),
-                            node_id: state.next_id(),
-                        });
-                    } else {
-                        return Err(StatementError::AssignmentToNonId);
-                    }
+                    let token_span = token.span;
+                    let id = match state.next().token_type {
+                        // consume id
+                        TokenType::Identifier(id) => id,
+                        _ => unreachable!("Already checked for id!"),
+                    };
+                    state.next(); // consume equal sign
+                    let assignment = parse_expression(state, 0)?;
+                    block_statements.push(Statement {
+                        span: Span::merge(&token_span, &assignment.span),
+                        stype: StatementT::Assignment {
+                            identifier: id,
+                            value: assignment,
+                        },
+                        node_id: state.next_id(),
+                    });
                 } else {
-                    block_statements.push(expr.into());
+                    block_statements.push(parse_expression(state, -1)?.into());
                 }
             }
             TokenType::Op(Operator::Minus) | TokenType::Literal(_) => {
