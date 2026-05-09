@@ -15,7 +15,6 @@ use crate::{
 #[derive(Debug)]
 pub enum SemanticError {
     IncompatibleTypes { left: ReturnType, right: ReturnType },
-    UnexpectedRoot,
     UseBeforeDefinition,
     AlreadyDefinedInScope,
 }
@@ -28,9 +27,10 @@ enum ReturnType {
 
 impl From<DeclarationKeyword> for ReturnType {
     fn from(value: DeclarationKeyword) -> Self {
-        match value {
-            DeclarationKeyword::Error => ReturnType::Error,
-            _ => ReturnType::Standard(value),
+        if DeclarationKeyword::Error == value {
+            ReturnType::Error
+        } else {
+            ReturnType::Standard(value)
         }
     }
 }
@@ -277,9 +277,7 @@ fn populate_link_table(
                     &mut dec_tables.link_table,
                     symbol_table,
                 );
-                dec_tables
-                    .type_table
-                    .push(ReturnType::Standard(DeclarationKeyword::Error));
+                dec_tables.type_table.push(ReturnType::Error);
                 diag.push(statement.span, SemanticError::UseBeforeDefinition);
             }
         }
