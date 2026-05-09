@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use crate::{
-    lexer::token::{Literal, Span},
+    lexer::token::{DeclarationKeyword, Literal, Span},
     parser::{
         expression::{Expression, ExpressionT, ValueExpression},
         statement::*,
@@ -17,6 +19,49 @@ enum ReturnType {
 impl From<Literal> for ReturnType {
     fn from(value: Literal) -> Self {
         ReturnType::Literal(value)
+    }
+}
+
+// need datastructures now. given a root expression, need to populate ALLnodes into tables.
+// we have symbol table. it is transient.
+struct Symbol {
+    symbol_id: usize,
+    depth: usize,
+    identifier: String,
+    symbol_type: SymbolType,
+}
+enum SymbolType {
+    Variable,
+    Function,
+    Type, // int, bool, CustomStruct
+}
+struct SymbolTable {
+    scopes: Vec<HashMap<String, Symbol>>,
+}
+
+impl SymbolTable {
+    fn define(self: &mut Self, id: String, node_id: usize, symbol_type: SymbolType) {
+        let depth = self.scopes.len() - 1;
+        if let Some(current_scope) = self.scopes.last_mut() {
+            current_scope.insert(
+                id.clone(),
+                Symbol {
+                    symbol_id: node_id,
+                    depth,
+                    identifier: id,
+                    symbol_type: symbol_type,
+                },
+            );
+        }
+    }
+
+    fn lookup(&self, id: &str) -> Option<&Symbol> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(symbol) = scope.get(id) {
+                return Some(symbol);
+            }
+        }
+        None
     }
 }
 
