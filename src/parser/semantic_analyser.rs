@@ -15,7 +15,7 @@ enum SyntaxError {
     UseBeforeDefinition(Span),
     AlreadyDefinedInScope(Span),
 }
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 enum ReturnType {
     Standard(DeclarationKeyword),
     Custom(usize), // custom datatype: by string.
@@ -81,6 +81,7 @@ impl SymbolTable {
     }
 }
 
+#[derive(Debug)]
 struct SymTables {
     link_table: Vec<usize>,
     type_table: Vec<Option<ReturnType>>,
@@ -90,7 +91,7 @@ struct SymTables {
 impl SymTables {
     fn new(num_ids: usize) -> Self {
         Self {
-            link_table: vec![0; num_ids],
+            link_table: vec![usize::MAX; num_ids],
             type_table: vec![None; num_ids],
             depth_table: vec![Some(0); num_ids],
         }
@@ -100,6 +101,8 @@ impl SymTables {
 pub fn get_tables(root: &Statement, num_ids: usize) -> Result<SymTables, SyntaxError> {
     let mut tables = SymTables::new(num_ids);
     let mut symbol_table = SymbolTable::new();
+    tables.depth_table[root.node_id] = Some(symbol_table.depth());
+    tables.link_table[root.node_id] = root.node_id;
     match &root.stype {
         StatementT::Root { statements } => {
             for statement in statements {
@@ -240,7 +243,13 @@ mod tests {
         let mut state = ParseState::new(scan(input));
         let (root, size) = generate_ast(&mut state).unwrap();
 
-        let tables = get_tables(&root, size).expect("Generated syntax error");
+        let tables: SymTables = get_tables(&root, size).expect("Generated syntax error");
+
+        println!("{:?}", tables);
+
+        for l in &tables.link_table {
+            assert_ne!(*l, usize::MAX);
+        }
 
         // Assume you know through inspection that:
         // Node 0 is 'int a' (Declaration)
