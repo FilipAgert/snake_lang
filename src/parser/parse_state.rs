@@ -1,13 +1,14 @@
-use super::super::lexer::token::TokenType::EOF;
 use super::super::lexer::token::*;
+use crate::parser::diagnostic::*;
 use std::collections::VecDeque;
 
-pub struct ParseState {
+pub struct ParseState<'a> {
     tokens: VecDeque<Token>,
     counter: NodeCounter,
+    diag: &'a mut Diagnostic,
 }
 
-impl ParseState {
+impl<'a> ParseState<'a> {
     pub fn peek(&self) -> &Token {
         self.tokens.front().unwrap_or(&Token {
             token_type: TokenType::EOF,
@@ -34,11 +35,19 @@ impl ParseState {
         return self.counter.next_id();
     }
 
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<Token>, diag: &'a mut Diagnostic) -> Self {
         Self {
             tokens: tokens.into(),
             counter: NodeCounter::new(),
+            diag: diag,
         }
+    }
+
+    pub fn report<T>(&mut self, span: Span, error_t: T)
+    where
+        T: Into<ErrorT>,
+    {
+        self.diag.push(span, error_t);
     }
 
     // If we have an error, this iterates the tokens until we hit (but do not consume) a recovery token.
