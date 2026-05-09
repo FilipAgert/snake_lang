@@ -1,3 +1,4 @@
+use crate::lexer::token::Span;
 use crate::lexer::token::*;
 use std::fmt::Binary;
 use std::iter::Peekable;
@@ -15,8 +16,14 @@ pub enum ValueExpression {
         arguments: Vec<Expression>,
     },
 }
+
 #[derive(Debug, PartialEq, Clone)]
-pub enum Expression {
+pub struct Expression {
+    etype: ExpressionT,
+    span: Span,
+}
+#[derive(Debug, PartialEq, Clone)]
+pub enum ExpressionT {
     // an expression is something which returns a value. It is NOT a statement.
     // An assignment, for example, is a binary statement which assigns a variable to the result of an expression.
     ValueExpression(ValueExpression), // Literal or a variable.
@@ -68,36 +75,43 @@ fn parse_argument_list(
 }
 
 fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, ExpressionError> {
-    match &tokens
-        .next()
-        .ok_or(ExpressionError::MissingOperand)?
-        .token_type
-    {
+    let next_token = tokens.next().ok_or(ExpressionError::MissingOperand)?;
+    match &next_token.token_type {
         TokenType::Identifier(id) => {
-            if let Some(token) = tokens.peek() {
-                if token.token_type
+            // function call or variable
+            if let Some(token) = tokens.peek()
+                && token.token_type
                     == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)))
-                {
-                    Ok(Expression::ValueExpression(
-                        ValueExpression::CallExpression {
-                            id: id.clone(),
-                            arguments: parse_argument_list(tokens)?,
-                        },
-                    ))
-                } else {
-                    Ok(Expression::ValueExpression(ValueExpression::Identifier(
-                        id.clone(),
-                    )))
-                }
+            {
+                let arguments = parse_argument_list(tokens)?;
+                let last_span = arguments.last().map(|e| e.span).unwrap_or(next_token.span);
+                let fn_span = Span::merge(
+                    &next_token.span,
+                    &Span {
+                        start: last_span.start,
+                        end: last_span.end + 1,
+                    },
+                );
+                // + 1 to consume the brace.
+                Ok(Expression {
+                    etype: ExpressionT::ValueExpression(ValueExpression::CallExpression {
+                        id: id.clone(),
+                        arguments: arguments,
+                    }),
+                    span: fn_span,
+                })
             } else {
-                Ok(Expression::ValueExpression(ValueExpression::Identifier(
-                    id.clone(),
-                )))
+                // variable
+                Ok(Expression {
+                    etype: ExpressionT::ValueExpression(ValueExpression::Identifier(id.clone())),
+                    span: next_token.span,
+                })
             }
         }
-        TokenType::Literal(literal) => Ok(Expression::ValueExpression(ValueExpression::Literal(
-            literal.clone(),
-        ))),
+        TokenType::Literal(literal) => Ok(Expression {
+            span: next_token.span,
+            etype: ExpressionT::ValueExpression(ValueExpression::Literal(literal.clone())),
+        }),
         TokenType::Op(op) => match op {
             Operator::Minus => todo!(),
             _ => Err(ExpressionError::OperandOnLhsError),
@@ -137,10 +151,13 @@ pub fn parse_expression(
             tokens.next();
             let right = parse_expression(tokens, precedence + 1)?;
 
-            left = Expression::BinOp {
-                op: op.clone(),
-                left: Box::new(left),
-                right: Box::new(right),
+            left = Expression {
+                span: Span::merge(&left.span, &right.span),
+                etype: ExpressionT::BinOp {
+                    op: op.clone(),
+                    left: Box::new(left),
+                    right: Box::new(right),
+                },
             };
         } else {
             break;
