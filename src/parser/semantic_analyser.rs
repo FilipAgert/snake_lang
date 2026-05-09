@@ -287,4 +287,59 @@ mod tests {
         // Use your ReturnType enum variants here
         assert!(tables.type_table[decl_id].is_some());
     }
+
+    #[test]
+    fn test_scope_shadowing() {
+        let input = "int a; { int a; a = 5; } a = 10;";
+        let mut state = ParseState::new(scan(input));
+        let (root, size) = generate_ast(&mut state).unwrap();
+        let tables = get_tables(&root, size).expect("Failed to generate tables");
+
+        if let StatementT::Root { statements } = root.stype {
+            let global_decl_id = statements[0].node_id;
+            let block_node = &statements[1];
+            let global_usage_id = statements[2].node_id;
+
+            // Extracting IDs from the block { int a; a = 5; }
+            if let StatementT::Block {
+                statements: block_stmts,
+            } = &block_node.stype
+            {
+                let local_decl_id = block_stmts[0].node_id;
+                let local_usage_id = block_stmts[1].node_id;
+
+                // 1. Local usage must link to local declaration
+                assert_eq!(tables.link_table[local_usage_id], local_decl_id);
+                assert_eq!(tables.depth_table[local_decl_id], Some(1));
+
+                // 2. Global usage must link to global declaration
+                assert_eq!(tables.link_table[global_usage_id], global_decl_id);
+                assert_eq!(tables.depth_table[global_decl_id], Some(0));
+
+                // 3. Ensure they link to different nodes
+                assert_ne!(
+                    tables.link_table[local_usage_id],
+                    tables.link_table[global_usage_id]
+                );
+            }
+        }
+    }
+    #[test]
+    fn test_undeclared_variable() {
+        let input = "a = 5;int a = 4;";
+        let mut state = ParseState::new(scan(input));
+        let (root, size) = generate_ast(&mut state).unwrap();
+
+        // Depending on your implementation, this should return an Err
+        // or the link_table entry should remain usize::MAX
+        let result = get_tables(&root, size);
+
+        match result {
+            Err(err) => assert!(matches!(
+                err,
+                SyntaxError::UseBeforeDefinition(Span { start: 0, end: 5 })
+            )), // Correctly caught as a syntax/semantic error
+            _ => assert!(false),
+        }
+    }
 }
