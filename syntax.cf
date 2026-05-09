@@ -1,4 +1,6 @@
-fn foo(int arg1, bool arg2): int{
-
-
+{
+    int a = 5;
+    int b = 4;
+    int c = d + 4;
+    int d;
 }

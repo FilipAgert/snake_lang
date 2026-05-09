@@ -430,6 +430,22 @@ mod tests {
             ReturnType::Standard(DeclarationKeyword::Int)
         ));
     }
+    #[test]
+    fn test_link_tables_2() {
+        let input = "{
+            int a = 5;
+            int b = 4;
+            int c = d + 4;
+            int d;
+            }";
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let (root, size) = generate_ast(&mut state).unwrap();
+
+        let tables: DecTables = get_dec_tables(&root, &mut diag, size);
+        type_check_pass(&root, &mut diag, &tables);
+        assert_eq!(diag.get_errors().len(), 1);
+    }
 
     #[test]
     fn test_scope_shadowing() {
