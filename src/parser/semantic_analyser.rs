@@ -252,9 +252,6 @@ mod tests {
             assert_ne!(*l, usize::MAX);
         }
 
-        // Assume you know through inspection that:
-        // Node 0 is 'int a' (Declaration)
-        // Node 1 is 'a' in 'a = 15' (Usage)
         let (decl_id, usage_id) = if let StatementT::Root { statements } = root.stype {
             (statements[0].node_id, statements[1].node_id)
         } else {
