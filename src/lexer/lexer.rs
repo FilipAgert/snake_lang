@@ -47,7 +47,7 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
             };
             let str_token = TokenStr::new(mem::take(&mut curr_str), span);
             strings.push(str_token);
-            curr_start = idx;
+            curr_start = idx + 1;
         } else if SPECIAL_SYMBOLS.contains(c) {
             if !curr_str.is_empty() {
                 let span = Span {
@@ -67,7 +67,7 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
         } else if c != ' ' {
             curr_str.push(c);
         } else if c == ' ' {
-            curr_start = idx;
+            curr_start = idx + 1;
         }
     }
     if !curr_str.is_empty() {
