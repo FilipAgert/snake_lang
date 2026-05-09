@@ -38,7 +38,7 @@ pub struct Statement {
 }
 
 #[derive(Debug, Clone)]
-enum StatementError {
+pub enum StatementError {
     ExpressionError(ExpressionError),
     UnexpectedEOF,
     UnexpectedToken,
@@ -122,19 +122,24 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
 
     todo!();
 }
-pub fn generate_ast(state: &mut ParseState) -> Result<Statement, StatementError> {
+pub fn generate_ast(state: &mut ParseState) -> Result<(Statement, usize), StatementError> {
+    let root_id = state.next_id();
     let (root_statements, span) = generate_ast_block(state)?;
     if !matches!(state.next().token_type, TokenType::EOF) {
         return Err(StatementError::UnexpectedToken);
     }
+    let size = state.next_id();
 
-    Ok(Statement {
-        stype: StatementT::Root {
-            statements: root_statements,
+    Ok((
+        Statement {
+            stype: StatementT::Root {
+                statements: root_statements,
+            },
+            span: span.unwrap_or(Span { start: 0, end: 1 }),
+            node_id: root_id,
         },
-        span: span.unwrap_or(Span { start: 0, end: 1 }),
-        node_id: state.next_id(),
-    })
+        size,
+    ))
 }
 fn generate_ast_block(
     state: &mut ParseState,
@@ -241,7 +246,7 @@ mod tests {
     fn test_build_expression_1() {
         let input = "int a; a = 15*x+3;";
         let mut state = ParseState::new(scan(input));
-        let ast = generate_ast(&mut state).unwrap();
+        let (ast, _) = generate_ast(&mut state).unwrap();
         assert!(matches!(ast.stype, StatementT::Root { statements: _ }));
         if let StatementT::Root { statements } = ast.stype.clone() {
             assert!(statements.len() == 2);

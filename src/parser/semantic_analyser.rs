@@ -8,6 +8,7 @@ use crate::{
     },
 };
 
+#[derive(Debug)]
 enum SyntaxError {
     IncompatibleTypes(Span),
     UnexpectedRoot(Span),
@@ -96,11 +97,18 @@ impl SymTables {
     }
 }
 
-pub fn get_tables(root: &Statement, num_ids: usize) -> SymTables {
+pub fn get_tables(root: &Statement, num_ids: usize) -> Result<SymTables, SyntaxError> {
     let mut tables = SymTables::new(num_ids);
     let mut symbol_table = SymbolTable::new();
-
-    tables
+    match &root.stype {
+        StatementT::Root { statements } => {
+            for statement in statements {
+                populate_tables(statement, &mut tables, &mut symbol_table)?;
+            }
+        }
+        _ => panic!("Should only call this method on the root"),
+    }
+    Ok(tables)
 }
 
 fn populate_tables(
@@ -174,7 +182,6 @@ fn populate_tables(
             for parameter in parameters {
                 populate_tables(parameter, tables, symbol_table)?;
             }
-
             for statement in body {
                 populate_tables(statement, tables, symbol_table)?;
             }
@@ -215,4 +222,59 @@ fn populate_tables_expression(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Binary;
+    use std::os::linux::raw::stat;
+
+    use super::*;
+    use crate::lexer::lexer::scan;
+    use crate::parser::parse_state::ParseState;
+    use crate::parser::statement::generate_ast;
+
+    #[test]
+    fn test_tables() {
+        let input = "int a; a = 15;";
+        let mut state = ParseState::new(scan(input));
+        let (root, size) = generate_ast(&mut state).unwrap();
+
+        let tables = get_tables(&root, size).expect("Generated syntax error");
+
+        // Assume you know through inspection that:
+        // Node 0 is 'int a' (Declaration)
+        // Node 1 is 'a' in 'a = 15' (Usage)
+        let (decl_id, usage_id) = if let StatementT::Root { statements } = root.stype {
+            (statements[0].node_id, statements[1].node_id)
+        } else {
+            panic!("Waah!")
+        };
+        // 1. Test LinkTable: Usage must point to Declaration
+        assert_eq!(
+            tables.link_table[usage_id], decl_id,
+            "Usage of 'a' should link to its declaration"
+        );
+
+        assert!(matches!(
+            tables.type_table[decl_id],
+            Some(ReturnType::Standard(DeclarationKeyword::Int))
+        ));
+
+        // 2. Test DepthTable: Both should be at the same scope depth
+        assert_eq!(
+            tables.depth_table[decl_id],
+            Some(0),
+            "Declaration 'a' should be at depth 0"
+        );
+        assert_eq!(
+            tables.depth_table[usage_id],
+            Some(0),
+            "Usage of 'a' should inherit depth 0"
+        );
+
+        // 3. Test TypeTable: Declaration should have the 'int' type
+        // Use your ReturnType enum variants here
+        assert!(tables.type_table[decl_id].is_some());
+    }
 }
