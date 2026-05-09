@@ -85,20 +85,6 @@ impl SymbolTable {
 struct SymTables {
     link_table: Vec<usize>,
     type_table: Vec<Option<ReturnType>>,
-    depth_table: Vec<Option<usize>>,
-}
-
-impl SymTables {
-    pub fn declaration(
-        &mut self,
-        node_id: usize,
-        r_type: Option<ReturnType>,
-        depth: Option<usize>,
-    ) {
-        self.link_table[node_id] = node_id;
-        self.type_table[node_id] = r_type;
-        self.depth_table[node_id] = depth;
-    }
 }
 
 impl SymTables {
@@ -106,7 +92,6 @@ impl SymTables {
         Self {
             link_table: vec![usize::MAX; num_ids],
             type_table: vec![None; num_ids],
-            depth_table: vec![Some(0); num_ids],
         }
     }
 }
@@ -246,7 +231,7 @@ mod tests {
     use crate::parser::statement::generate_ast;
 
     #[test]
-    fn test_tables() {
+    fn test_link_tables() {
         let input = "int a; a = 15;";
         let mut diag = Diagnostic::new();
         let mut state = ParseState::new(scan(input), &mut diag);
@@ -276,22 +261,6 @@ mod tests {
             tables.type_table[decl_id],
             Some(ReturnType::Standard(DeclarationKeyword::Int))
         ));
-
-        // 2. Test DepthTable: Both should be at the same scope depth
-        assert_eq!(
-            tables.depth_table[decl_id],
-            Some(0),
-            "Declaration 'a' should be at depth 0"
-        );
-        assert_eq!(
-            tables.depth_table[usage_id],
-            Some(0),
-            "Usage of 'a' should inherit depth 0"
-        );
-
-        // 3. Test TypeTable: Declaration should have the 'int' type
-        // Use your ReturnType enum variants here
-        assert!(tables.type_table[decl_id].is_some());
     }
 
     #[test]
@@ -318,11 +287,9 @@ mod tests {
 
                 // 1. Local usage must link to local declaration
                 assert_eq!(tables.link_table[local_usage_id], local_decl_id);
-                assert_eq!(tables.depth_table[local_decl_id], Some(1));
 
                 // 2. Global usage must link to global declaration
                 assert_eq!(tables.link_table[global_usage_id], global_decl_id);
-                assert_eq!(tables.depth_table[global_decl_id], Some(0));
 
                 // 3. Ensure they link to different nodes
                 assert_ne!(
