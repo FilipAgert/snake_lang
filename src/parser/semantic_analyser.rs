@@ -3,6 +3,7 @@ use std::any::Any;
 use std::{collections::HashMap, hash::Hash};
 
 use crate::parser::diagnostic::Diagnostic;
+use crate::parser::expression;
 use crate::parser::parse_state::Counter;
 use crate::{
     lexer::token::{DeclarationKeyword, Literal, Span},
@@ -13,7 +14,7 @@ use crate::{
 };
 #[derive(Debug)]
 pub enum SemanticError {
-    IncompatibleTypes,
+    IncompatibleTypes { left: ReturnType, right: ReturnType },
     UnexpectedRoot,
     UseBeforeDefinition,
     AlreadyDefinedInScope,
@@ -22,11 +23,15 @@ pub enum SemanticError {
 enum ReturnType {
     Standard(DeclarationKeyword),
     Custom(usize), // custom datatype: by string.
+    Error,         // Compiler could not determine type.
 }
 
 impl From<DeclarationKeyword> for ReturnType {
     fn from(value: DeclarationKeyword) -> Self {
-        ReturnType::Standard(value)
+        match value {
+            DeclarationKeyword::Error => ReturnType::Error,
+            _ => ReturnType::Standard(value),
+        }
     }
 }
 
@@ -89,6 +94,100 @@ impl SymbolTable {
 struct DecTables {
     link_table: Vec<usize>,
     type_table: Vec<ReturnType>,
+}
+
+pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &DecTables) {
+    match &node.stype {
+        StatementT::Root { statements } | StatementT::Block { statements } => {
+            for statement in statements {
+                type_check_pass(&statement, diag, dec_tables);
+            }
+        }
+        StatementT::Assignment { value, .. }
+        | StatementT::Declaration {
+            assignment: Some(value),
+            ..
+        } => {
+            let lhs_type = &dec_tables.type_table[dec_tables.link_table[node.node_id]];
+            let rhs_type = &type_check_pass_expr(value, diag, dec_tables);
+            if lhs_type != rhs_type
+                && *lhs_type != ReturnType::Error
+                && *rhs_type != ReturnType::Error
+            {
+                // check for error so we do not spawn unecessarily many errors.
+                diag.push(
+                    node.span,
+                    SemanticError::IncompatibleTypes {
+                        left: lhs_type.clone(),
+                        right: rhs_type.clone(),
+                    },
+                );
+            }
+        }
+        StatementT::Declaration { .. } => {} // already checked in above branch.
+        StatementT::ExpressionStatement(expr) => {
+            type_check_pass_expr(
+                &Expression {
+                    etype: expr.clone(),
+                    span: node.span,
+                    node_id: node.node_id,
+                },
+                diag,
+                dec_tables,
+            );
+        }
+        StatementT::FunctionDeclaration { .. } => {
+            // need to check arguments match
+            // need to check all statements in body
+            // need to check return type matches function signature.
+            todo!(); // still need to check for return type in body here...
+        }
+    }
+}
+
+fn type_check_pass_expr(
+    expr: &Expression,
+    diag: &mut Diagnostic,
+    dec_tables: &DecTables,
+) -> ReturnType {
+    match &expr.etype {
+        ExpressionT::Error => ReturnType::Standard(DeclarationKeyword::Error),
+        ExpressionT::ValueExpression(val) => match val {
+            ValueExpression::CallExpression { arguments, .. } => {
+                for arg in arguments {
+                    type_check_pass_expr(arg, diag, dec_tables);
+                }
+                dec_tables.type_table[dec_tables.link_table[expr.node_id]].clone() // return type of function.
+            }
+            ValueExpression::Literal(l) => {
+                let decl: DeclarationKeyword = l.clone().into();
+                decl.into()
+            }
+            ValueExpression::Identifier(_) => {
+                dec_tables.type_table[dec_tables.link_table[expr.node_id]].clone()
+            }
+        },
+        ExpressionT::BinOp { left, op, right } => {
+            let left_type = type_check_pass_expr(&left, diag, dec_tables);
+            let right_type = type_check_pass_expr(&right, diag, dec_tables);
+
+            if left_type != right_type {
+                if left_type != ReturnType::Error && right_type != ReturnType::Error {
+                    diag.push(
+                        expr.span,
+                        SemanticError::IncompatibleTypes {
+                            left: left_type,
+                            right: right_type,
+                        },
+                    );
+                }
+                ReturnType::Error
+            } else {
+                left_type
+            }
+        }
+        ExpressionT::UnOp { operand, .. } => type_check_pass_expr(&operand, diag, dec_tables),
+    }
 }
 
 pub fn get_dec_tables(root: &Statement, diag: &mut Diagnostic, num_ids: usize) -> DecTables {
