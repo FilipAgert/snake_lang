@@ -332,7 +332,7 @@ mod tests {
 
         assert!(matches!(
             tables.type_table[decl_id],
-            Some(ReturnType::Standard(DeclarationKeyword::Int))
+            ReturnType::Standard(DeclarationKeyword::Int)
         ));
     }
 
