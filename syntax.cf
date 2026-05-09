@@ -1,0 +1,4 @@
+fn foo(int arg1, bool arg2): int{
+
+
+}

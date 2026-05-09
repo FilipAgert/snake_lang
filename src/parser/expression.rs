@@ -61,7 +61,7 @@ fn parse_argument_list(
         {
             tokens.next(); // Consume the closing brace.
             return Ok(exprs);
-        } else if token.token_type == TokenType::Symbol(Symbol::Colon) {
+        } else if token.token_type == TokenType::Symbol(Symbol::Comma) {
             // Consume comma separated list
             tokens.next();
         } else {

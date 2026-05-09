@@ -12,6 +12,7 @@ pub enum StatementT {
     FunctionDeclaration {
         identifier: String,
         arguments: Vec<Declaration>,
+        return_type: DeclarationKeyword,
         body: Vec<Statement>,
     },
     Assignment {
@@ -93,7 +94,7 @@ fn parse_declaration(
     let assignment_token = tokens.peek().ok_or(StatementError::UnexpectedEOF)?;
     let mut assignment_span = None;
     let assignment: Option<Expression> = match assignment_token.token_type {
-        TokenType::Symbol(Symbol::Semicolon | Symbol::Colon) => None, //
+        TokenType::Symbol(Symbol::Semicolon | Symbol::Comma) => None, //
         TokenType::Op(Operator::Equal) => {
             tokens.next(); // Consume equal
             let assignment_expr = parse_expression(tokens, 0)?;
@@ -117,8 +118,8 @@ fn parse_declaration(
 fn parse_fn_declaration(tokens: &mut Peekable<Iter<Token>>) -> Result<Statement, StatementError> {
     // expect the identifier to be the first token.
     // then we expect an argument list made of several declarations
-    // then we expect a return type by -> type
-    // then a function body
+    // then we expect a return type by ': type'
+    // then a function body surrounded by braces.
     let function_keyword = tokens.next().ok_or(StatementError::UnexpectedEOF)?;
 
     todo!();

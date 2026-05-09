@@ -14,7 +14,7 @@ impl TokenStr {
     }
 }
 
-const SPECIAL_SYMBOLS: &'static str = "()[]{};=+-/*,";
+const SPECIAL_SYMBOLS: &'static str = "()[]{};=+-/*,:";
 
 pub fn scan(str: &str) -> Vec<Token> {
     let token_str = seperate_string(str);

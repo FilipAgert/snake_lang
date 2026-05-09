@@ -70,6 +70,7 @@ pub enum Keyword {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum DeclarationKeyword {
     Int,
+    Void,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -107,6 +108,7 @@ impl Operator {
 #[derive(Debug, PartialEq)]
 pub enum Symbol {
     Bracket(Bracket),
+    Comma,
     Colon,
     Semicolon,
 }
@@ -124,7 +126,8 @@ impl Symbol {
 
         match c {
             ';' => Some(Symbol::Semicolon),
-            ',' => Some(Symbol::Colon),
+            ',' => Some(Symbol::Comma),
+            ':' => Some(Symbol::Colon),
             _ => None,
         }
     }
@@ -164,6 +167,7 @@ impl DeclarationKeyword {
     pub fn from_str(s: &str) -> Option<DeclarationKeyword> {
         match s {
             "int" => Some(DeclarationKeyword::Int),
+            "void" => Some(DeclarationKeyword::Void),
             _ => None,
         }
     }
