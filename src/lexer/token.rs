@@ -17,7 +17,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     Keyword(Keyword),
     Identifier(String),
@@ -61,7 +61,7 @@ impl TokenType {
         TokenType::Identifier(str.to_string())
     }
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
     Declaration(DeclarationKeyword),
     FunctionDeclaration,
@@ -105,14 +105,14 @@ impl Operator {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Symbol {
     Bracket(Bracket),
     Comma,
     Colon,
     Semicolon,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Bracket {
     Parenthesis(Side),
     Square(Side),
@@ -145,7 +145,7 @@ impl Bracket {
         }
     }
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Side {
     Left,
     Right,

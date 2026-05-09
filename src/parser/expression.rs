@@ -1,3 +1,4 @@
+use super::parse_state::*;
 use crate::lexer::token::Span;
 use crate::lexer::token::*;
 use std::fmt::Binary;
@@ -21,6 +22,7 @@ pub enum ValueExpression {
 pub struct Expression {
     pub etype: ExpressionT,
     pub span: Span,
+    pub node_id: usize,
 }
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExpressionT {
@@ -47,40 +49,42 @@ pub enum ExpressionError {
     UnexpectedEOF,
     MissingClosingBrace,
 }
-fn parse_argument_list(
-    tokens: &mut Peekable<Iter<Token>>,
-) -> Result<Vec<Expression>, ExpressionError> {
+fn parse_argument_list(state: &mut ParseState) -> Result<Vec<Expression>, ExpressionError> {
     // first token is left brace, stops on the corresponding right brace.
     let mut exprs = Vec::<Expression>::new();
     // scan until we hit the same level of opening brace.
     // seperate arguments at highest level by commas.
     // call parse_expression on each comma seperated list
-    tokens.next(); // consume the opening brace.
-    while let Some(token) = tokens.peek() {
+    state.next(); // consume the opening brace.
+    loop {
+        let token = state.peek();
         if token.token_type == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right)))
         {
-            tokens.next(); // Consume the closing brace.
+            state.next(); // Consume the closing brace.
             return Ok(exprs);
         } else if token.token_type == TokenType::Symbol(Symbol::Comma) {
             // Consume comma separated list
-            tokens.next();
+            state.next();
+        } else if token.token_type == TokenType::EOF {
+            break;
         } else {
-            exprs.push(parse_expression(tokens, 0)?);
+            exprs.push(parse_expression(state, 0)?);
         }
     }
     Err(ExpressionError::UnexpectedEOF)
 }
 
-fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, ExpressionError> {
-    let next_token = tokens.next().ok_or(ExpressionError::MissingOperand)?;
+fn parse_primary(state: &mut ParseState) -> Result<Expression, ExpressionError> {
+    let next_token = state.next();
     match &next_token.token_type {
         TokenType::Identifier(id) => {
             // function call or variable
-            if let Some(token) = tokens.peek()
-                && token.token_type
-                    == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)))
+            let token = state.peek();
+            if token.token_type
+                == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)))
+                && token.token_type != TokenType::EOF
             {
-                let arguments = parse_argument_list(tokens)?;
+                let arguments = parse_argument_list(state)?;
                 let last_span = arguments.last().map(|e| e.span).unwrap_or(next_token.span);
                 let fn_span = Span::merge(
                     &next_token.span,
@@ -96,18 +100,21 @@ fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, Expre
                         arguments: arguments,
                     }),
                     span: fn_span,
+                    node_id: state.next_id(),
                 })
             } else {
                 // variable
                 Ok(Expression {
                     etype: ExpressionT::ValueExpression(ValueExpression::Identifier(id.clone())),
                     span: next_token.span,
+                    node_id: state.next_id(),
                 })
             }
         }
         TokenType::Literal(literal) => Ok(Expression {
             span: next_token.span,
             etype: ExpressionT::ValueExpression(ValueExpression::Literal(literal.clone())),
+            node_id: state.next_id(),
         }),
         TokenType::Op(op) => match op {
             Operator::Minus => todo!(),
@@ -116,8 +123,8 @@ fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, Expre
         TokenType::Keyword(_) => Err(ExpressionError::UnexpectedKeyword),
         TokenType::Symbol(s) => match s {
             Symbol::Bracket(Bracket::Parenthesis(Side::Left)) => {
-                let expr = parse_expression(tokens, 0)?;
-                let next = tokens.next().ok_or(ExpressionError::UnexpectedEOF)?;
+                let expr = parse_expression(state, 0)?;
+                let next = state.next();
                 if next.token_type
                     == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right)))
                 {
@@ -133,20 +140,21 @@ fn parse_primary(tokens: &mut Peekable<Iter<Token>>) -> Result<Expression, Expre
 }
 
 pub fn parse_expression(
-    tokens: &mut Peekable<Iter<Token>>,
+    state: &mut ParseState,
     min_precedence: i32,
 ) -> Result<Expression, ExpressionError> {
-    let mut left = parse_primary(tokens)?;
+    let mut left = parse_primary(state)?;
 
-    while let Some(token) = tokens.peek() {
-        if let TokenType::Op(op) = &token.token_type {
+    loop {
+        let token_type = state.peek().token_type.clone();
+        if let TokenType::Op(op) = token_type {
             let precedence = op.precedence_value();
             if precedence < min_precedence {
                 break;
             }
 
-            tokens.next();
-            let right = parse_expression(tokens, precedence + 1)?;
+            state.next();
+            let right = parse_expression(state, precedence + 1)?;
 
             left = Expression {
                 span: Span::merge(&left.span, &right.span),
@@ -155,7 +163,10 @@ pub fn parse_expression(
                     left: Box::new(left),
                     right: Box::new(right),
                 },
+                node_id: state.next_id(),
             };
+        } else if token_type == TokenType::EOF {
+            return Err(ExpressionError::UnexpectedEOF);
         } else {
             break;
         }
@@ -175,8 +186,8 @@ mod tests {
     #[test]
     fn test_build_expression_1() {
         let input = "15*x+3";
-        let mut tokens = scan(input);
-        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+        let mut state = ParseState::new(scan(input));
+        let expression = parse_expression(&mut state, 0).unwrap();
 
         assert!(matches!(expression.etype, ExpressionT::BinOp { .. }));
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
@@ -213,8 +224,8 @@ mod tests {
     fn test_parenthesis_precedence() {
         // (5 + 3) should be evaluated first, making it a child of '*'
         let input = "10*(5+3)";
-        let mut tokens = scan(input);
-        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+        let mut state = ParseState::new(scan(input));
+        let expression = parse_expression(&mut state, 0).unwrap();
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Times);
@@ -246,8 +257,8 @@ mod tests {
     fn test_long_expression_chain() {
         // 1 + 2 * 3 + 4 should result in ((1 + (2 * 3)) + 4)
         let input = "1+2*3+4";
-        let mut tokens = scan(input);
-        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+        let mut state = ParseState::new(scan(input));
+        let expression = parse_expression(&mut state, 0).unwrap();
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Plus);
@@ -279,8 +290,8 @@ mod tests {
         // Testing: my_func(a, b) * 2
         // Note: parse_argument_list must be implemented for this to pass
         let input = "my_func(a, b) * 2";
-        let mut tokens = scan(input);
-        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+        let mut state = ParseState::new(scan(input));
+        let expression = parse_expression(&mut state, 0).unwrap();
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Times);
@@ -314,8 +325,8 @@ mod tests {
     #[test]
     fn test_deeply_nested_parentheses() {
         let input = "(((10)))";
-        let mut tokens = scan(input);
-        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+        let mut state = ParseState::new(scan(input));
+        let expression = parse_expression(&mut state, 0).unwrap();
 
         assert_eq!(
             expression.etype,
@@ -327,8 +338,8 @@ mod tests {
     fn test_operator_precedence_descending() {
         // 10 / 2 - 1 should be ((10 / 2) - 1)
         let input = "10/2-1";
-        let mut tokens = scan(input);
-        let expression = parse_expression(&mut tokens.iter().peekable(), 0).unwrap();
+        let mut state = ParseState::new(scan(input));
+        let expression = parse_expression(&mut state, 0).unwrap();
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
             assert_eq!(op, Operator::Minus);
