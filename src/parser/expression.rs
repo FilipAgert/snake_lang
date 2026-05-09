@@ -159,11 +159,7 @@ fn parse_primary(state: &mut ParseState) -> Expression {
                         next_token.span,
                         ExpressionError::MissingClosingBrace(next_token.token_type),
                     );
-                    Expression {
-                        etype: ExpressionT::Error,
-                        span: next_token.span,
-                        node_id: state.next_id(),
-                    }
+                    expr
                 }
             }
             _ => {
