@@ -1,15 +1,15 @@
 use crate::lexer::token::Span;
 use crate::parser::expression::ExpressionError;
-use crate::parser::semantic_analyser::SyntaxError;
+use crate::parser::semantic_analyser::SemanticError;
 use crate::parser::statement::StatementError;
 pub enum ErrorT {
-    SyntaxError(SyntaxError),
+    SemanticError(SemanticError),
     StatementError(StatementError),
     ExpressionError(ExpressionError),
 }
-impl From<SyntaxError> for ErrorT {
-    fn from(value: SyntaxError) -> Self {
-        Self::SyntaxError(value)
+impl From<SemanticError> for ErrorT {
+    fn from(value: SemanticError) -> Self {
+        Self::SemanticError(value)
     }
 }
 impl From<StatementError> for ErrorT {
@@ -23,8 +23,8 @@ impl From<ExpressionError> for ErrorT {
     }
 }
 pub struct Error {
-    error_t: ErrorT,
-    span: Span,
+    pub error_t: ErrorT,
+    pub span: Span,
 }
 pub struct Diagnostic {
     errors: Vec<Error>,

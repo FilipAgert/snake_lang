@@ -1,5 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
+use crate::parser::diagnostic::Diagnostic;
 use crate::{
     lexer::token::{DeclarationKeyword, Literal, Span},
     parser::{
@@ -7,9 +8,8 @@ use crate::{
         statement::{self, *},
     },
 };
-
 #[derive(Debug)]
-pub enum SyntaxError {
+pub enum SemanticError {
     IncompatibleTypes,
     UnexpectedRoot,
     UseBeforeDefinition,
@@ -89,6 +89,19 @@ struct SymTables {
 }
 
 impl SymTables {
+    pub fn declaration(
+        &mut self,
+        node_id: usize,
+        r_type: Option<ReturnType>,
+        depth: Option<usize>,
+    ) {
+        self.link_table[node_id] = node_id;
+        self.type_table[node_id] = r_type;
+        self.depth_table[node_id] = depth;
+    }
+}
+
+impl SymTables {
     fn new(num_ids: usize) -> Self {
         Self {
             link_table: vec![usize::MAX; num_ids],
@@ -98,7 +111,7 @@ impl SymTables {
     }
 }
 
-pub fn get_tables(root: &Statement, num_ids: usize) -> Result<SymTables, SyntaxError> {
+pub fn get_tables(root: &Statement, diag: &mut Diagnostic, num_ids: usize) -> SymTables {
     let mut tables = SymTables::new(num_ids);
     let mut symbol_table = SymbolTable::new();
     tables.depth_table[root.node_id] = Some(symbol_table.depth());
@@ -106,27 +119,30 @@ pub fn get_tables(root: &Statement, num_ids: usize) -> Result<SymTables, SyntaxE
     match &root.stype {
         StatementT::Root { statements } => {
             for statement in statements {
-                populate_tables(statement, &mut tables, &mut symbol_table)?;
+                populate_link_table(statement, &mut tables.link_table, &mut symbol_table, diag);
             }
         }
         _ => panic!("Should only call this method on the root"),
     }
-    Ok(tables)
+    tables
 }
 
-fn populate_tables(
+fn populate_link_table(
     statement: &Statement,
-    tables: &mut SymTables,
+    link_table: &mut Vec<usize>,
     symbol_table: &mut SymbolTable,
-) -> Result<(), SyntaxError> {
+    diag: &mut Diagnostic,
+) {
     match &statement.stype {
-        StatementT::Root { .. } => return Err(SyntaxError::UnexpectedRoot(statement.span)),
+        StatementT::Root { .. } => panic!("Unexpected root"),
         StatementT::Assignment { identifier, value } => {
-            populate_tables_expression(&value, tables, symbol_table)?; // expression should also be filled.
+            pop_link_tab_exp(&value, link_table, symbol_table, diag); // expression should also be filled.
             if let Some(symbol) = symbol_table.lookup(&identifier) {
-                tables.link_table[statement.node_id] = symbol.symbol_id;
+                link_table[statement.node_id] = symbol.symbol_id;
             } else {
-                return Err(SyntaxError::UseBeforeDefinition(statement.span));
+                symbol_table.define(identifier.clone(), statement.node_id);
+                link_table[statement.node_id] = statement.node_id;
+                diag.push(statement.span, SemanticError::UseBeforeDefinition);
             }
         }
         StatementT::Declaration {
@@ -137,33 +153,30 @@ fn populate_tables(
             if let Some(symbol) = symbol_table.lookup(identifier)
                 && symbol.depth == symbol_table.depth()
             {
-                return Err(SyntaxError::AlreadyDefinedInScope(statement.span));
+                diag.push(statement.span, SemanticError::AlreadyDefinedInScope);
             } else {
                 symbol_table.define(identifier.clone(), statement.node_id);
-                tables.link_table[statement.node_id] = statement.node_id;
-                tables.type_table[statement.node_id] = Some((*keyword).into());
-                tables.depth_table[statement.node_id] = Some(symbol_table.depth());
+                link_table[statement.node_id] = statement.node_id;
             }
             assignment
                 .as_ref()
-                .map(|a| populate_tables_expression(&a, tables, symbol_table));
+                .map(|a| pop_link_tab_exp(&a, link_table, symbol_table, diag));
         }
-        StatementT::ExpressionStatement(expr) => populate_tables_expression(
+        StatementT::ExpressionStatement(expr) => pop_link_tab_exp(
             &Expression {
                 etype: expr.clone(),
                 span: statement.span,
                 node_id: statement.node_id,
             },
-            tables,
+            link_table,
             symbol_table,
-        )?,
+            diag,
+        ),
         StatementT::Block { statements } => {
-            tables.depth_table[statement.node_id] = Some(symbol_table.depth());
-            tables.link_table[statement.node_id] = statement.node_id;
-
+            link_table[statement.node_id] = statement.node_id;
             symbol_table.push_empty();
             for statement in statements {
-                populate_tables(statement, tables, symbol_table)?
+                populate_link_table(statement, link_table, symbol_table, diag)
             }
             symbol_table.pop();
         }
@@ -176,74 +189,74 @@ fn populate_tables(
             if let Some(symbol) = symbol_table.lookup(identifier)
                 && symbol.depth == symbol_table.depth()
             {
-                return Err(SyntaxError::AlreadyDefinedInScope(statement.span));
+                diag.push(statement.span, SemanticError::AlreadyDefinedInScope);
             }
-            tables.depth_table[statement.node_id] = Some(symbol_table.depth());
-            tables.link_table[statement.node_id] = statement.node_id;
-            tables.type_table[statement.node_id] = Some((*return_type).into());
+            link_table[statement.node_id] = statement.node_id;
             symbol_table.push_empty();
             for parameter in parameters {
-                populate_tables(parameter, tables, symbol_table)?;
+                populate_link_table(parameter, link_table, symbol_table, diag);
             }
             for statement in body {
-                populate_tables(statement, tables, symbol_table)?;
+                populate_link_table(statement, link_table, symbol_table, diag);
             }
             symbol_table.pop();
         }
     }
-    Ok(())
 }
 
-fn populate_tables_expression(
+fn pop_link_tab_exp(
     expression: &Expression,
-    tables: &mut SymTables,
+    link_table: &mut Vec<usize>,
     symbol_table: &mut SymbolTable,
-) -> Result<(), SyntaxError> {
-    tables.depth_table[expression.node_id] = Some(symbol_table.depth());
+    diag: &mut Diagnostic,
+) {
     match &expression.etype {
         ExpressionT::ValueExpression(val) => match val {
-            ValueExpression::Literal(l) => {
-                tables.link_table[expression.node_id] = expression.node_id;
-                tables.type_table[expression.node_id] =
-                    Some(ReturnType::Standard(l.clone().into()));
+            ValueExpression::Literal(..) => {
+                link_table[expression.node_id] = expression.node_id;
             }
             ValueExpression::Identifier(id) | ValueExpression::CallExpression { id, .. } => {
                 if let Some(symbol) = symbol_table.lookup(&id) {
-                    tables.link_table[expression.node_id] = symbol.symbol_id;
+                    link_table[expression.node_id] = symbol.symbol_id;
                 } else {
-                    return Err(SyntaxError::UseBeforeDefinition(expression.span));
+                    link_table[expression.node_id] = expression.node_id;
+                    diag.push(expression.span, SemanticError::UseBeforeDefinition);
                 }
             }
         },
         ExpressionT::BinOp { left, op, right } => {
-            populate_tables_expression(left.as_ref(), tables, symbol_table)?;
-            populate_tables_expression(right.as_ref(), tables, symbol_table)?;
+            pop_link_tab_exp(left.as_ref(), link_table, symbol_table, diag);
+            pop_link_tab_exp(right.as_ref(), link_table, symbol_table, diag);
         }
         ExpressionT::UnOp { op, operand } => {
-            populate_tables_expression(&operand, tables, symbol_table)?
+            pop_link_tab_exp(&operand, link_table, symbol_table, diag)
+        }
+        ExpressionT::Error => {
+            link_table[expression.node_id] = expression.node_id;
         }
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::any::Any;
     use std::fmt::Binary;
     use std::os::linux::raw::stat;
 
     use super::*;
     use crate::lexer::lexer::scan;
+    use crate::parser::diagnostic::*;
     use crate::parser::parse_state::ParseState;
     use crate::parser::statement::generate_ast;
 
     #[test]
     fn test_tables() {
         let input = "int a; a = 15;";
-        let mut state = ParseState::new(scan(input));
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
 
-        let tables: SymTables = get_tables(&root, size).expect("Generated syntax error");
+        let tables: SymTables = get_tables(&root, &mut diag, size);
 
         println!("{:?}", root);
         println!("{:?}", tables);
@@ -288,9 +301,11 @@ mod tests {
     #[test]
     fn test_scope_shadowing() {
         let input = "int a; { int a; a = 5; } a = 10;";
-        let mut state = ParseState::new(scan(input));
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
-        let tables = get_tables(&root, size).expect("Failed to generate tables");
+
+        let tables: SymTables = get_tables(&root, &mut diag, size);
 
         if let StatementT::Root { statements } = root.stype {
             let global_decl_id = statements[0].node_id;
@@ -324,18 +339,17 @@ mod tests {
     #[test]
     fn test_undeclared_variable() {
         let input = "a = 5;int a = 4;";
-        let mut state = ParseState::new(scan(input));
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
 
         // Depending on your implementation, this should return an Err
         // or the link_table entry should remain usize::MAX
-        let result = get_tables(&root, size);
-
-        match result {
-            Err(err) => assert!(matches!(
-                err,
-                SyntaxError::UseBeforeDefinition(Span { start: 0, end: 5 })
-            )), // Correctly caught as a syntax/semantic error
+        let result = get_tables(&root, &mut diag, size);
+        assert!(diag.has_errors());
+        let err = &diag.get_errors()[0];
+        match err.error_t {
+            ErrorT::SemanticError(SemanticError::UseBeforeDefinition) => assert!(true),
             _ => assert!(false),
         }
     }

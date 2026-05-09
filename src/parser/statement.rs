@@ -169,14 +169,19 @@ fn generate_ast_block(
         let token = state.peek();
         match token.token_type {
             TokenType::Keyword(Keyword::Declaration(_)) => {
-                let decl = parse_declaration(state)?;
-                block_statements.push(decl);
+                let decl = parse_declaration(state);
+                if let Ok(decl) = decl {
+                    block_statements.push(decl);
+                } else {
+                    state.synchronize_to(&[TokenType::Symbol(Symbol::Semicolon)]);
+                }
                 //expect and consume semicolon.
-                if !matches!(
-                    state.next().token_type,
-                    TokenType::Symbol(Symbol::Semicolon),
-                ) {
-                    return Err(StatementError::ExpectedSemiColon);
+                let next_token = state.peek();
+                if !matches!(next_token.token_type, TokenType::Symbol(Symbol::Semicolon),) {
+                    state.report(next_token.span.clone(), StatementError::ExpectedSemiColon);
+                    // if not a semicolon, report it, but continue as usual.
+                } else {
+                    state.next(); // consume semicolon if its there. 
                 }
             }
             TokenType::Keyword(Keyword::FunctionDeclaration) => {
@@ -195,7 +200,7 @@ fn generate_ast_block(
                         _ => unreachable!("Already checked for id!"),
                     };
                     state.next(); // consume equal sign
-                    let assignment = parse_expression(state, 0)?;
+                    let assignment = parse_expression(state, 0);
                     block_statements.push(Statement {
                         span: Span::merge(&token_span, &assignment.span),
                         stype: StatementT::Assignment {
@@ -205,11 +210,11 @@ fn generate_ast_block(
                         node_id: state.next_id(),
                     });
                 } else {
-                    block_statements.push(parse_expression(state, -1)?.into());
+                    block_statements.push(parse_expression(state, 0).into());
                 }
             }
             TokenType::Op(Operator::Minus) | TokenType::Literal(_) => {
-                block_statements.push(parse_expression(state, 0)?.into());
+                block_statements.push(parse_expression(state, 0).into());
             }
             TokenType::Symbol(Symbol::Semicolon) => {
                 state.next();
@@ -218,13 +223,14 @@ fn generate_ast_block(
                 let brace = state.next(); // consume token and descend into block.
                 let (block, _) = generate_ast_block(state)?;
                 // expect closing brace. consumes it.
-                let closing_brace = state.next();
+                let closing_brace = state.peek();
                 if !matches!(
                     closing_brace.token_type,
                     TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right)))
                 ) {
                     return Err(StatementError::ExpectedClosingBrace);
                 }
+                let closing_brace = state.next();
                 let span = Span::merge(&brace.span, &closing_brace.span);
                 block_statements.push(Statement {
                     stype: StatementT::Block { statements: block },
@@ -261,12 +267,15 @@ mod tests {
     use super::*;
     use crate::lexer::lexer::scan;
     use crate::lexer::token::*;
+    use crate::parser::diagnostic::Diagnostic;
     use crate::parser::expression::*;
 
     #[test]
     fn test_build_expression_1() {
         let input = "int a; a = 15*x+3;";
-        let mut state = ParseState::new(scan(input));
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let expression = parse_expression(&mut state, 0);
         let (ast, _) = generate_ast(&mut state).unwrap();
         assert!(matches!(ast.stype, StatementT::Root { statements: _ }));
         if let StatementT::Root { statements } = ast.stype.clone() {
