@@ -114,11 +114,12 @@ impl std::fmt::Display for StatementError {
         match self {
             StatementError::ExpectedBlockHere => write!(
                 f,
-                "Expected a block {} starting here.",
-                Bracket::CurlyBrace(crate::lexer::token::Side::Left)
+                "Expected a code block '{}...{}' starting here.",
+                Bracket::CurlyBrace(crate::lexer::token::Side::Left),
+                Bracket::CurlyBrace(crate::lexer::token::Side::Right)
             ),
             StatementError::ExpectedToken { expected, got } => {
-                write!(f, "Expected {} but got {}.", expected, got)
+                write!(f, "Expected '{}' but got '{}'.", expected, got)
             }
             StatementError::ExpressionError(expr) => write!(f, "{}", expr),
             StatementError::UnexpectedToken(t) => write!(f, "Unexpectedly received {}.", t),
@@ -129,7 +130,11 @@ impl std::fmt::Display for SemanticError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SemanticError::AlreadyDefinedInScope(id) => {
-                write!(f, "The identifier {} is already defined in this scope.", id)
+                write!(
+                    f,
+                    "The identifier '{}' is already defined in this scope.",
+                    id
+                )
             }
             SemanticError::IncompatibleReturnType { fun_sig, attempted } => {
                 write!(
@@ -141,7 +146,7 @@ impl std::fmt::Display for SemanticError {
             SemanticError::IncompatibleTypes { left, right } => {
                 write!(
                     f,
-                    "Lhs has type: {} which is incompatible with {}.",
+                    "Lhs has type: '{}' which is incompatible with '{}'.",
                     left, right
                 )
             }
@@ -159,7 +164,7 @@ impl std::fmt::Display for SemanticError {
                 )
             }
             SemanticError::UseBeforeDefinition(id) => {
-                write!(f, "Use of {} before its definition", id)
+                write!(f, "Use of '{}' before its definition", id)
             }
             SemanticError::InvalidArgumentType {
                 arg_type,
@@ -172,6 +177,112 @@ impl std::fmt::Display for SemanticError {
                     arg_type, parameter_type
                 )
             }
+        }
+    }
+}
+
+impl SemanticError {
+    pub fn detailed_text(&self) -> Option<String> {
+        match self {
+            SemanticError::AlreadyDefinedInScope(..) => Some(format!("Already defined here.")),
+            SemanticError::IncompatibleReturnType { fun_sig, attempted } => {
+                Some(format!("Should be type {} not {}", fun_sig, attempted))
+            }
+            SemanticError::IncompatibleTypes { left, right } => {
+                Some(format!("{}  and   {}", left, right))
+            }
+            SemanticError::InvalidArgumentType { arg_type, .. } => {
+                Some(format!("Arg of type {}.", arg_type))
+            }
+            SemanticError::TooFewArguments {
+                desired, provided, ..
+            } => Some(format!("Missing {} argument(s)", desired - provided)),
+            SemanticError::TooManyArguments { limit, provided } => {
+                Some(format!("{} excess argument(s)", provided - limit))
+            }
+            SemanticError::UseBeforeDefinition(id) => Some(format!("{} used here", id)),
+        }
+    }
+    pub fn secondary_text(&self) -> Option<String> {
+        match self {
+            SemanticError::AlreadyDefinedInScope(id) => {
+                Some(format!("Original definition of '{}' is here", id))
+            }
+            SemanticError::InvalidArgumentType { parameter_type, .. } => {
+                Some(format!("Parameter is defined as type {}", parameter_type))
+            }
+            SemanticError::IncompatibleReturnType { fun_sig, .. } => Some(format!(
+                "Function signature specifies {} return type",
+                fun_sig
+            )),
+            SemanticError::TooFewArguments { .. } => Some("Missing arguments here".to_string()),
+            SemanticError::TooManyArguments { limit, .. } => {
+                Some(format!("The {} legal arguments", limit))
+            }
+            _ => None,
+        }
+    }
+}
+impl ExpressionError {
+    pub fn detailed_text(&self) -> Option<String> {
+        match self {
+            ExpressionError::BinaryOperandOnLhsError(o) => {
+                Some(format!("Operator '{}' requires two operands", o))
+            }
+            ExpressionError::MissingClosingBrace(b) => Some(format!("Unclosed '{}' bracket", b)),
+            ExpressionError::UnexpectedEOF => Some("File ended unexpectedly".to_string()),
+            ExpressionError::UnexpectedKeyword(k) => Some(format!("'{}' is not valid here", k)),
+            ExpressionError::UnexpectedSymbol(s) => Some(format!("Symbol '{}' is out of place", s)),
+        }
+    }
+
+    pub fn secondary_text(&self) -> Option<String> {
+        match self {
+            ExpressionError::MissingClosingBrace(b) => {
+                Some(format!("This '{}' remains unclosed", b))
+            }
+            // Usually, Unexpected tokens don't have a secondary span
+            // unless you track the start of the current expression.
+            _ => None,
+        }
+    }
+}
+
+impl StatementError {
+    pub fn detailed_text(&self) -> Option<String> {
+        match self {
+            StatementError::ExpectedBlockHere => {
+                Some("Body of statement must start with '{'".to_string())
+            }
+            StatementError::ExpectedToken { expected, .. } => {
+                Some(format!("Expected '{}' here", expected))
+            }
+            StatementError::ExpressionError(expr) => expr.detailed_text(),
+            StatementError::UnexpectedToken(t) => Some(format!("Did not expect '{}' here", t)),
+        }
+    }
+    pub fn secondary_text(&self) -> Option<String> {
+        match self {
+            StatementError::ExpressionError(expr) => expr.secondary_text(),
+            _ => None,
+        }
+    }
+}
+
+impl ErrorT {
+    pub fn detailed_text(&self) -> Option<String> {
+        match self {
+            ErrorT::ExpressionError(e) => e.detailed_text(),
+            ErrorT::StatementError(e) => e.detailed_text(),
+            ErrorT::SemanticError(e) => e.detailed_text(),
+        }
+    }
+
+    pub fn secondary_text(&self) -> Option<String> {
+        match self {
+            ErrorT::ExpressionError(e) => e.secondary_text(),
+            ErrorT::StatementError(e) => e.secondary_text(),
+            ErrorT::SemanticError(e) => e.secondary_text(),
         }
     }
 }

@@ -101,7 +101,7 @@ fn format_highlight(
 pub fn print_error(source: &str, error: &Error) {
     let (line_s, col_s) = get_line_col(source, error.span.start);
 
-    println!("\x1b[1;31mError:\x1b[0m {:?}", error.error_t);
+    println!("\x1b[1;31mError:\x1b[0m {}", error.error_t);
     println!("  --> line {}:{}", line_s, col_s);
 
     let snippet = format_highlight(
