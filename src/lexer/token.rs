@@ -76,6 +76,7 @@ impl TokenType {
 pub enum Keyword {
     Declaration(DeclarationKeyword),
     FunctionDeclaration,
+    Return,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -196,6 +197,7 @@ impl Keyword {
         }
         match s {
             "fn" => Some(Keyword::FunctionDeclaration),
+            "return" => Some(Keyword::Return),
             _ => None,
         }
     }
