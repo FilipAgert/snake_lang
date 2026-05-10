@@ -1,6 +1,6 @@
 fn f(int x, bool y, z) : bool {
     int d = 4;
-    f + x;
+    g + x;
     return y;
 }
 

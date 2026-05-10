@@ -14,7 +14,14 @@ use crate::{
 };
 #[derive(Debug)]
 pub enum SemanticError {
-    IncompatibleTypes { left: ReturnType, right: ReturnType },
+    IncompatibleTypes {
+        left: ReturnType,
+        right: ReturnType,
+    },
+    IncompatibleReturnType {
+        fun_sig: ReturnType,
+        attempted: ReturnType,
+    },
     UseBeforeDefinition,
     AlreadyDefinedInScope,
 }
@@ -125,7 +132,7 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
             }
         }
         StatementT::Declaration { .. } => {} // already checked in above branch.
-        StatementT::ExpressionStatement(expr) => {
+        StatementT::ExpressionStatement(expr) | StatementT::ReturnStatement(expr) => {
             type_check_pass_expr(
                 &Expression {
                     etype: expr.clone(),
@@ -136,11 +143,46 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
                 dec_tables,
             );
         }
-        StatementT::FunctionDeclaration { .. } => {
-            // need to check arguments match
-            // need to check all statements in body
-            // need to check return type matches function signature.
-            todo!(); // still need to check for return type in body here...
+        StatementT::FunctionDeclaration {
+            body: body,
+            parameters: parameters,
+            return_type: return_type,
+            ..
+        } => {
+            for parameter in parameters {
+                type_check_pass(parameter, diag, dec_tables);
+            }
+
+            for statement in body {
+                match &statement.stype {
+                    StatementT::ReturnStatement(expr) => {
+                        let ret_type = type_check_pass_expr(
+                            &Expression {
+                                etype: expr.clone(),
+                                span: statement.span,
+                                node_id: statement.node_id,
+                            },
+                            diag,
+                            dec_tables,
+                        );
+
+                        let fn_rettype: ReturnType = (*return_type).into();
+                        if ret_type != fn_rettype
+                            && ret_type != ReturnType::Error
+                            && fn_rettype != ReturnType::Error
+                        {
+                            diag.push(
+                                statement.span,
+                                SemanticError::IncompatibleReturnType {
+                                    fun_sig: fn_rettype,
+                                    attempted: ret_type,
+                                },
+                            );
+                        }
+                    }
+                    _ => type_check_pass(statement, diag, dec_tables),
+                }
+            }
         }
     }
 }
@@ -310,17 +352,19 @@ fn populate_link_table(
                 dec_tables.type_table.push(keyword.clone().into());
             }
         }
-        StatementT::ExpressionStatement(expr) => pop_link_tab_exp(
-            &Expression {
-                etype: expr.clone(),
-                span: statement.span,
-                node_id: statement.node_id,
-            },
-            dec_tables,
-            symbol_ctr,
-            symbol_table,
-            diag,
-        ),
+        StatementT::ExpressionStatement(expr) | StatementT::ReturnStatement(expr) => {
+            pop_link_tab_exp(
+                &Expression {
+                    etype: expr.clone(),
+                    span: statement.span,
+                    node_id: statement.node_id,
+                },
+                dec_tables,
+                symbol_ctr,
+                symbol_table,
+                diag,
+            )
+        }
         StatementT::Block { statements } => {
             symbol_table.push_empty();
             for statement in statements {
@@ -333,7 +377,6 @@ fn populate_link_table(
             parameters,
             return_type,
             body,
-            return_expression,
         } => {
             if let Some(symbol) = symbol_table.lookup(identifier)
                 && symbol.depth == symbol_table.depth()
@@ -358,13 +401,6 @@ fn populate_link_table(
                 for statement in body {
                     populate_link_table(statement, dec_tables, symbol_ctr, symbol_table, diag);
                 }
-                pop_link_tab_exp(
-                    return_expression,
-                    dec_tables,
-                    symbol_ctr,
-                    symbol_table,
-                    diag,
-                );
                 symbol_table.pop();
             }
         }
