@@ -95,11 +95,9 @@ fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError
             (id, token.span)
         }
         _ => {
-            state.report::<StatementError>(
-                peeked_token.span,
-                DeclarationError::MissingIdentifier.into(),
-            );
-            return Err(DeclarationError::MissingIdentifier.into());
+            let span = peeked_token.span.clone();
+            state.report::<StatementError>(span, DeclarationError::MissingIdentifier.into());
+            (state.next_anon_var(), span)
         }
     };
 
