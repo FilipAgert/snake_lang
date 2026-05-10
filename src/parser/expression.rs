@@ -85,7 +85,6 @@ fn parse_primary(state: &mut ParseState) -> Expression {
             let token = state.peek();
             if token.token_type
                 == TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)))
-                && token.token_type != TokenType::EOF
             {
                 let arguments = parse_argument_list(state);
                 let last_span = arguments.last().map(|e| e.span).unwrap_or(next_token.span);

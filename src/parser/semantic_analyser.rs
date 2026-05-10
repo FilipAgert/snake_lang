@@ -524,7 +524,21 @@ fn pop_link_tab_exp(
         ExpressionT::Error => {}
         ExpressionT::ValueExpression(val) => match val {
             ValueExpression::Literal(..) => {}
-            ValueExpression::Identifier(id) | ValueExpression::CallExpression { id, .. } => {
+            ValueExpression::CallExpression { id, arguments } => {
+                if let Some(symbol) = symbol_table.lookup(&id) {
+                    dec_tables.link_table[expression.node_id] = symbol.symbol_id;
+                } else {
+                    diag.push(expression.span, SemanticError::UseBeforeDefinition);
+                    dec_tables.link_table[expression.node_id] = symbol_ctr.next_id();
+                    dec_tables.type_table.push(ExpressionType::Error);
+                    dec_tables.ref_table.push(&ERROR_STATEMENT);
+                    // should we define the symbol here? unclear. probably not.
+                }
+                for arg in arguments {
+                    pop_link_tab_exp(arg, dec_tables, symbol_ctr, symbol_table, diag);
+                }
+            }
+            ValueExpression::Identifier(id) => {
                 if let Some(symbol) = symbol_table.lookup(&id) {
                     dec_tables.link_table[expression.node_id] = symbol.symbol_id;
                 } else {
@@ -693,6 +707,34 @@ mod tests {
         diag.print_errors(input);
         match &err.error_t {
             ErrorT::StatementError(StatementError::ExpectedToken { .. }) => {
+                assert!(true)
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn test_function_call_type_error() {
+        let input = "fn f(int x, bool b): int {
+        return 2;
+    }
+    fn main(): int{
+    int a = 2;
+    int x = f(1,aparse_expression,3);
+    }
+
+    ";
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let (mut root, mut size) = generate_ast(&mut state).unwrap();
+        let result = get_dec_tables(&root, &mut diag, size);
+        diag.print_errors(input);
+        assert!(!diag.has_errors());
+        type_check_pass(&root, &mut diag, &result);
+        let err = &diag.get_errors()[0];
+        diag.print_errors(input);
+        match &err.error_t {
+            ErrorT::SemanticError(SemanticError::InvalidArgumentType { .. }) => {
                 assert!(true)
             }
             _ => assert!(false),

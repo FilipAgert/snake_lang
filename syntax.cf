@@ -12,5 +12,5 @@ fn f(int x, bool y, int z) : bool {
 
 {
     bool bla = 1;
-    int a = f(true, 2, 1);
+    int a = f(bla, 2, 1);
 }
