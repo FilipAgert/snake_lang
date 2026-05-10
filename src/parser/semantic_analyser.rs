@@ -3,7 +3,7 @@ use std::any::Any;
 use std::{collections::HashMap, hash::Hash};
 
 use crate::parser::diagnostic::Diagnostic;
-use crate::parser::expression;
+use crate::parser::expression::{self, ExpressionError};
 use crate::parser::parse_state::Counter;
 use crate::{
     lexer::token::{BuiltInType, Literal, Span},
@@ -24,6 +24,14 @@ pub enum SemanticError {
     },
     UseBeforeDefinition,
     AlreadyDefinedInScope,
+    TooManyArguments {
+        limit: usize,
+    },
+    InvalidArgumentType {
+        arg_type: ExpressionType,
+        parameter_type: ExpressionType,
+        parameter_span: Span,
+    },
 }
 #[derive(Clone, PartialEq, Debug)]
 pub enum ExpressionType {
@@ -99,13 +107,15 @@ impl SymbolTable {
 }
 
 #[derive(Debug)]
-pub struct DecTables {
+pub struct DecTables<'a> {
     link_table: Vec<usize>,
     type_table: Vec<ExpressionType>,
+    ref_table: Vec<&'a Statement>,
 }
 
 pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &DecTables) {
     match &node.stype {
+        StatementT::ErrorStatement => {}
         StatementT::Root { statements } | StatementT::Block { statements } => {
             for statement in statements {
                 type_check_pass(&statement, diag, dec_tables);
@@ -216,8 +226,59 @@ fn type_check_pass_expr(
         ExpressionT::Error => ExpressionType::Standard(BuiltInType::Error),
         ExpressionT::ValueExpression(val) => match val {
             ValueExpression::CallExpression { arguments, .. } => {
-                for arg in arguments {
-                    type_check_pass_expr(arg, diag, dec_tables);
+                let fun_decl_statement = dec_tables.ref_table[dec_tables.link_table[expr.node_id]];
+                let parameters: Option<Vec<(&ExpressionType, &Span)>> =
+                    match &fun_decl_statement.stype {
+                        StatementT::ErrorStatement => None, //
+                        StatementT::FunctionDeclaration { parameters, .. } => {
+                            let argtypes: Vec<(&ExpressionType, &Span)> = parameters
+                                .iter()
+                                .map(|f| {
+                                    if let (StatementT::Declaration { datatype, .. }, span) =
+                                        (&f.stype, &f.span)
+                                    {
+                                        (datatype, span)
+                                    } else {
+                                        panic!("We expect all to be declarations");
+                                    }
+                                })
+                                .collect();
+                            Some(argtypes)
+                        }
+                        _ => {
+                            panic!("Should not enter this branch. Linker stage fucked up.")
+                        }
+                    };
+
+                for (i, argument) in arguments.iter().enumerate() {
+                    // check argument of function (that they are not constructed of bad expressions)
+                    let argtype = type_check_pass_expr(argument, diag, dec_tables);
+
+                    // check that argument types match parameters
+                    if let Some(parameters) = &parameters {
+                        if let Some((param_type, span)) = parameters.get(i) {
+                            if argtype != **param_type
+                                && argtype != ExpressionType::Error
+                                && **param_type != ExpressionType::Error
+                            {
+                                diag.push(
+                                    argument.span.clone(),
+                                    SemanticError::InvalidArgumentType {
+                                        arg_type: argtype,
+                                        parameter_type: (*param_type).clone(),
+                                        parameter_span: (*span).clone(),
+                                    },
+                                );
+                            }
+                        } else {
+                            diag.push(
+                                argument.span.clone(),
+                                SemanticError::TooManyArguments {
+                                    limit: parameters.len(),
+                                },
+                            );
+                        }
+                    }
                 }
                 dec_tables.type_table[dec_tables.link_table[expr.node_id]].clone() // return type of function.
             }
@@ -252,12 +313,17 @@ fn type_check_pass_expr(
     }
 }
 
-pub fn get_dec_tables(root: &Statement, diag: &mut Diagnostic, num_ids: usize) -> DecTables {
+pub fn get_dec_tables<'a>(
+    root: &'a Statement,
+    diag: &mut Diagnostic,
+    num_ids: usize,
+) -> DecTables<'a> {
     let mut symbol_ctr = Counter::new();
     let mut symbol_table = SymbolTable::new();
     let mut dec_tables = DecTables {
         link_table: vec![usize::MAX; num_ids],
         type_table: Vec::new(),
+        ref_table: Vec::new(),
     };
     populate_link_table(
         root,
@@ -284,14 +350,15 @@ fn define_symbol(
 
 // first pass of compiler through AST.
 // Defines all links and types of all declarations.
-fn populate_link_table(
-    statement: &Statement,
-    dec_tables: &mut DecTables,
+fn populate_link_table<'a>(
+    statement: &'a Statement,
+    dec_tables: &mut DecTables<'a>,
     symbol_ctr: &mut Counter,
     symbol_table: &mut SymbolTable,
     diag: &mut Diagnostic,
 ) {
     match &statement.stype {
+        StatementT::ErrorStatement => {}
         StatementT::Root { statements } => {
             // we need to first forward declare all functions and global variables.
             symbol_table.push_empty();
@@ -299,7 +366,7 @@ fn populate_link_table(
                 match &statement.stype {
                     StatementT::Declaration {
                         identifier,
-                        keyword: id_type,
+                        datatype: id_type,
                         ..
                     }
                     | StatementT::FunctionDeclaration {
@@ -315,6 +382,7 @@ fn populate_link_table(
                             symbol_table,
                         );
                         dec_tables.type_table.push(id_type.clone().into());
+                        dec_tables.ref_table.push(statement);
                     }
                     _ => (),
                 }
@@ -340,12 +408,13 @@ fn populate_link_table(
                     symbol_table,
                 );
                 dec_tables.type_table.push(ExpressionType::Error);
+                dec_tables.ref_table.push(statement);
                 diag.push(statement.span, SemanticError::UseBeforeDefinition);
             }
         }
         StatementT::Declaration {
             identifier,
-            keyword,
+            datatype: keyword,
             assignment,
         } => {
             if let Some(exp) = assignment {
@@ -370,6 +439,7 @@ fn populate_link_table(
                     symbol_table,
                 );
                 dec_tables.type_table.push(keyword.clone().into());
+                dec_tables.ref_table.push(statement);
             }
         }
         StatementT::ExpressionStatement(expr) | StatementT::ReturnStatement(expr) => {
@@ -414,6 +484,7 @@ fn populate_link_table(
                     symbol_table,
                 );
                 dec_tables.type_table.push(return_type.clone().into());
+                dec_tables.ref_table.push(statement);
                 symbol_table.push_empty();
                 for parameter in parameters {
                     populate_link_table(parameter, dec_tables, symbol_ctr, symbol_table, diag);
@@ -460,6 +531,7 @@ fn pop_link_tab_exp(
                     diag.push(expression.span, SemanticError::UseBeforeDefinition);
                     dec_tables.link_table[expression.node_id] = symbol_ctr.next_id();
                     dec_tables.type_table.push(ExpressionType::Error);
+                    dec_tables.ref_table.push(&ERROR_STATEMENT);
                     // should we define the symbol here? unclear. probably not.
                 }
             }
@@ -498,7 +570,7 @@ mod tests {
         println!("{:?}", root);
         println!("{:?}", tables);
 
-        let (decl_id, usage_id) = if let StatementT::Root { statements } = root.stype {
+        let (decl_id, usage_id) = if let StatementT::Root { statements } = &root.stype {
             (statements[0].node_id, statements[1].node_id)
         } else {
             panic!("Waah!")
@@ -539,7 +611,7 @@ mod tests {
 
         let tables: DecTables = get_dec_tables(&root, &mut diag, size);
 
-        if let StatementT::Root { statements } = root.stype {
+        if let StatementT::Root { statements } = &root.stype {
             let global_decl_id = statements[0].node_id;
             let block_node = &statements[1];
             let global_usage_id = statements[2].node_id;

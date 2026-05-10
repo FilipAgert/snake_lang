@@ -14,7 +14,7 @@ pub enum StatementT {
     },
     Declaration {
         identifier: Box<str>,
-        keyword: ExpressionType,
+        datatype: ExpressionType,
         assignment: Option<Expression>,
     },
     FunctionDeclaration {
@@ -37,7 +37,14 @@ pub enum StatementT {
         then: Box<Statement>,
         el: Option<Box<Statement>>,
     },
+    ErrorStatement,
 }
+
+pub const ERROR_STATEMENT: Statement = Statement {
+    stype: StatementT::ErrorStatement,
+    span: Span::min_info(),
+    node_id: usize::MAX,
+};
 
 #[derive(Debug, Clone)]
 pub struct Statement {
@@ -145,7 +152,7 @@ fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError
         node_id: state.next_id(),
         stype: StatementT::Declaration {
             identifier: id,
-            keyword: declaration_value.unwrap_or(ExpressionType::Error),
+            datatype: declaration_value.unwrap_or(ExpressionType::Error),
             assignment: assignment,
         },
         span: span,
@@ -621,7 +628,7 @@ mod tests {
             assert!(matches!(decl.stype, StatementT::Declaration { .. }));
             if let StatementT::Declaration {
                 identifier,
-                keyword,
+                datatype: keyword,
                 ..
             } = &decl.stype
             {
