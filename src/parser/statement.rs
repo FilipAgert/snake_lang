@@ -32,6 +32,11 @@ pub enum StatementT {
     },
     ReturnStatement(ExpressionT),
     ExpressionStatement(ExpressionT),
+    If {
+        conditional: Expression,
+        then: Box<Statement>,
+        el: Option<Box<Statement>>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +53,7 @@ pub enum StatementError {
     UnexpectedToken(TokenType),
     ExpectedToken { expected: TokenType, got: TokenType },
     AssignmentToNonId,
+    ExpectedBlockHere,
 }
 
 impl From<ExpressionError> for StatementError {
@@ -355,112 +361,200 @@ pub fn generate_ast(state: &mut ParseState) -> Result<(Statement, usize), Statem
         size,
     ))
 }
+
+fn next_statement(state: &mut ParseState) -> Result<Result<Statement, Token>, StatementError> {
+    let token = state.peek();
+    match token.token_type {
+        TokenType::Keyword(Keyword::Declaration(_)) => {
+            let decl = parse_declaration(state);
+            if let Ok(decl) = decl {
+                return Ok(Ok(decl));
+            } else {
+                let err = decl.expect_err("Already checked");
+                state.synchronize_to(&[TokenType::Symbol(Symbol::Semicolon)]);
+                return Err(err);
+            }
+        }
+        TokenType::Identifier(_) => {
+            // if next token ALSO is an identifier, this is likely a declaration of varible with a custom type.
+            if let TokenType::Identifier(..) = state.peek_at(1).token_type {
+                let decl = parse_declaration(state);
+                if let Ok(decl) = decl {
+                    return Ok(Ok(decl));
+                } else {
+                    let err = decl.expect_err("Checked for error.");
+                    state.synchronize_to(&[TokenType::Symbol(Symbol::Semicolon)]);
+                    return Err(err);
+                }
+            } else {
+                // This must be an expression. If it is a binop expression with operator =, turn it into an assignment.
+                if let TokenType::Op(op) = &state.peek_at(1).token_type
+                    && *op == Operator::Equal
+                {
+                    let token_span = token.span;
+                    let id = match state.next().token_type {
+                        // consume id
+                        TokenType::Identifier(id) => id,
+                        _ => unreachable!("Already checked for id!"),
+                    };
+                    state.next(); // consume equal sign
+                    let assignment = parse_expression(state, 0);
+                    return Ok(Ok(Statement {
+                        span: Span::merge(&token_span, &assignment.span),
+                        stype: StatementT::Assignment {
+                            identifier: id,
+                            value: assignment,
+                        },
+                        node_id: state.next_id(),
+                    }));
+                } else {
+                    return Ok(Ok(parse_expression(state, 0).into()));
+                }
+            }
+        }
+        TokenType::Keyword(Keyword::FunctionDeclaration) => {
+            let statement = parse_fn_declaration(state)?;
+            return Ok(Ok(statement));
+        }
+        TokenType::Keyword(Keyword::Return) => {
+            let ret = state.next();
+            let ret_expr = parse_expression(state, 0);
+            return Ok(Ok(Statement {
+                stype: StatementT::ReturnStatement(ret_expr.etype),
+                span: Span::merge(&ret.span, &ret_expr.span),
+                node_id: state.next_id(),
+            }));
+        }
+        TokenType::Keyword(Keyword::If) => {
+            let if_token = state.next();
+            // proper syntax is if [expr] {expression} opt else
+            let expr = parse_expression(state, 0);
+
+            let next = next_statement(state);
+            // e.g. a block... {}
+            let then_statement = if let (Ok(Ok(statement))) = next {
+                statement
+            } else {
+                if let (Ok(Err(token))) = next {
+                    state.report(
+                        token.span,
+                        StatementError::UnexpectedToken(token.token_type),
+                    );
+                } else if let (Err(err)) = next {
+                    state.report(expr.span, err);
+                }
+
+                Statement {
+                    stype: StatementT::Block {
+                        statements: Vec::new(),
+                    },
+                    span: Span::min_info(),
+                    node_id: state.next_id(),
+                }
+            };
+
+            let next = state.peek();
+            if next.token_type == Bracket::CurlyBrace(Side::Right).into() {
+                state.next();
+            }
+
+            let next = state.peek();
+            let else_block = if next.token_type == TokenType::Keyword(Keyword::Else) {
+                let else_keyword_span = next.span;
+                state.next();
+                let else_block = next_statement(state);
+
+                if let Ok(Ok(statement)) = else_block {
+                    Some(statement)
+                } else {
+                    state.report(else_keyword_span, StatementError::ExpectedBlockHere);
+                    None
+                }
+            } else {
+                None
+            };
+            let tot_span = Span::merge(
+                &if_token.span,
+                if let Some(else_block) = &else_block {
+                    &else_block.span
+                } else {
+                    &expr.span
+                },
+            );
+
+            Ok(Ok(Statement {
+                stype: StatementT::If {
+                    conditional: expr,
+                    then: Box::new(then_statement),
+                    el: else_block.map(|e| Box::new(e)),
+                },
+                span: tot_span,
+                node_id: state.next_id(),
+            }))
+        }
+        TokenType::Op(Operator::Minus) | TokenType::Literal(_) => {
+            return Ok(Ok(parse_expression(state, 0).into()));
+        }
+        TokenType::Symbol(Symbol::Semicolon) => {
+            return Ok(Err(state.next()));
+        }
+        TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Left))) => {
+            let brace = state.next(); // consume token and descend into block.
+            let (block, _) = generate_ast_block(state)?;
+            // expect closing brace. consumes it.
+            let closing_brace = state.peek();
+            if !matches!(
+                closing_brace.token_type,
+                TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right)))
+            ) {
+                return Err(StatementError::ExpectedToken {
+                    expected: TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))),
+                    got: closing_brace.token_type.clone(),
+                });
+            }
+            let closing_brace = state.next();
+            let span = Span::merge(&brace.span, &closing_brace.span);
+            return Ok(Ok(Statement {
+                stype: StatementT::Block { statements: block },
+                span: span,
+                node_id: state.next_id(),
+            }));
+        }
+        TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => {
+            return Ok(Err(state.peek().clone()));
+        }
+        // do not consume closing brace so that block calling can check for its existance
+        TokenType::EOF => {
+            return Ok(Err(state.next()));
+        }
+        _ => {
+            let err = StatementError::UnexpectedToken(token.token_type.clone());
+            state.report(token.span, err.clone());
+            state.synchronize_to(&[TokenType::Symbol(Symbol::Semicolon)]);
+            return Err(err);
+        }
+    }
+}
 fn generate_ast_block(
     state: &mut ParseState,
 ) -> Result<(Vec<Statement>, Option<Span>), StatementError> {
     let mut block_statements = Vec::<Statement>::new();
     loop {
-        let token = state.peek();
-        match token.token_type {
-            TokenType::Keyword(Keyword::Declaration(_)) => {
-                let decl = parse_declaration(state);
-                if let Ok(decl) = decl {
-                    block_statements.push(decl);
-                } else {
-                    state.synchronize_to(&[TokenType::Symbol(Symbol::Semicolon)]);
+        let res = next_statement(state);
+
+        if let Ok(statement) = res {
+            if let Ok(statement) = statement {
+                block_statements.push(statement);
+            } else if let Err(token) = statement {
+                match token.token_type {
+                    TokenType::EOF => break,
+                    TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => break,
+                    TokenType::Symbol(Symbol::Semicolon) => continue,
+                    _ => unreachable!("Should not be a possible return"),
                 }
             }
-            TokenType::Identifier(_) => {
-                // if next token ALSO is an identifier, this is likely a declaration of varible with a custom type.
-                if let TokenType::Identifier(..) = state.peek_at(1).token_type {
-                    let decl = parse_declaration(state);
-                    if let Ok(decl) = decl {
-                        block_statements.push(decl);
-                    } else {
-                        state.synchronize_to(&[TokenType::Symbol(Symbol::Semicolon)]);
-                    }
-                } else {
-                    // This must be an expression. If it is a binop expression with operator =, turn it into an assignment.
-                    if let TokenType::Op(op) = &state.peek_at(1).token_type
-                        && *op == Operator::Equal
-                    {
-                        let token_span = token.span;
-                        let id = match state.next().token_type {
-                            // consume id
-                            TokenType::Identifier(id) => id,
-                            _ => unreachable!("Already checked for id!"),
-                        };
-                        state.next(); // consume equal sign
-                        let assignment = parse_expression(state, 0);
-                        block_statements.push(Statement {
-                            span: Span::merge(&token_span, &assignment.span),
-                            stype: StatementT::Assignment {
-                                identifier: id,
-                                value: assignment,
-                            },
-                            node_id: state.next_id(),
-                        });
-                    } else {
-                        block_statements.push(parse_expression(state, 0).into());
-                    }
-                }
-            }
-            TokenType::Keyword(Keyword::FunctionDeclaration) => {
-                //  do not consume function declaration keyword
-                block_statements.push(parse_fn_declaration(state)?);
-            }
-            TokenType::Keyword(Keyword::Return) => {
-                let ret = state.next();
-                let ret_expr = parse_expression(state, 0);
-                block_statements.push(Statement {
-                    stype: StatementT::ReturnStatement(ret_expr.etype),
-                    span: Span::merge(&ret.span, &ret_expr.span),
-                    node_id: state.next_id(),
-                });
-            }
-            TokenType::Op(Operator::Minus) | TokenType::Literal(_) => {
-                block_statements.push(parse_expression(state, 0).into());
-            }
-            TokenType::Symbol(Symbol::Semicolon) => {
-                state.next();
-            }
-            TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Left))) => {
-                let brace = state.next(); // consume token and descend into block.
-                let (block, _) = generate_ast_block(state)?;
-                // expect closing brace. consumes it.
-                let closing_brace = state.peek();
-                if !matches!(
-                    closing_brace.token_type,
-                    TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right)))
-                ) {
-                    return Err(StatementError::ExpectedToken {
-                        expected: TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(
-                            Side::Right,
-                        ))),
-                        got: closing_brace.token_type.clone(),
-                    });
-                }
-                let closing_brace = state.next();
-                let span = Span::merge(&brace.span, &closing_brace.span);
-                block_statements.push(Statement {
-                    stype: StatementT::Block { statements: block },
-                    span: span,
-                    node_id: state.next_id(),
-                });
-            }
-            TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => break,
-            // do not consume closing brace so that block calling can check for its existance
-            TokenType::EOF => {
-                state.next(); // consume the token.
-                break;
-            }
-            _ => {
-                state.report(
-                    token.span,
-                    StatementError::UnexpectedToken(token.token_type.clone()),
-                );
-                state.synchronize_to(&[TokenType::Symbol(Symbol::Semicolon)]);
-            }
+        } else if let Err(err) = res {
+            continue;
         }
     }
     let span =

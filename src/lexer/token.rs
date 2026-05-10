@@ -33,6 +33,16 @@ pub enum TokenType {
     EOF,
 }
 
+impl From<Symbol> for TokenType {
+    fn from(value: Symbol) -> Self {
+        TokenType::Symbol(value)
+    }
+}
+impl From<Bracket> for TokenType {
+    fn from(value: Bracket) -> Self {
+        TokenType::Symbol(Symbol::Bracket(value))
+    }
+}
 #[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
     Integer(i32),
@@ -77,6 +87,9 @@ pub enum Keyword {
     Declaration(BuiltInType),
     FunctionDeclaration,
     Return,
+    If,
+    Else,
+    Struct,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -151,6 +164,11 @@ pub enum Symbol {
     Colon,
     Semicolon,
 }
+impl From<Bracket> for Symbol {
+    fn from(value: Bracket) -> Self {
+        Symbol::Bracket(value)
+    }
+}
 #[derive(Debug, PartialEq, Clone)]
 pub enum Bracket {
     Parenthesis(Side),
@@ -198,6 +216,9 @@ impl Keyword {
         match s {
             "fn" => Some(Keyword::FunctionDeclaration),
             "return" => Some(Keyword::Return),
+            "if" => Some(Keyword::If),
+            "else" => Some(Keyword::Else),
+            "struct" => Some(Keyword::Struct),
             _ => None,
         }
     }
