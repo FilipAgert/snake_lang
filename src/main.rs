@@ -2,7 +2,7 @@ mod error;
 mod lexer;
 mod parser;
 use crate::lexer::lexer::scan;
-use crate::parser::diagnostic::{Diagnostic, print_error};
+use crate::parser::diagnostic::Diagnostic;
 use crate::parser::parse_state::ParseState;
 use crate::parser::semantic_analyser::{DecTables, get_dec_tables, type_check_pass};
 use crate::parser::statement::generate_ast;
@@ -17,10 +17,7 @@ fn run_compiler(input: &str) -> i32 {
 
     if diag.has_errors() {
         println!("{} errors found: ", diag.get_errors().len());
-
-        for error in diag.get_errors() {
-            print_error(input, error);
-        }
+        diag.print_errors(input);
         return 1;
     } else {
         println!("Success! No compilation errors :)");

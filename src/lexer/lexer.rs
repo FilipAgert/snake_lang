@@ -56,7 +56,6 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
                     end: idx,
                 };
                 let str_token = TokenStr::new(mem::take(&mut curr_str), span);
-                curr_start = idx;
                 strings.push(str_token);
             }
             let spec_char_span = Span {
@@ -72,7 +71,6 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
                     end: idx,
                 };
                 let str_token = TokenStr::new(mem::take(&mut curr_str), span);
-                curr_start = idx;
                 strings.push(str_token);
             }
             curr_str.push(c);

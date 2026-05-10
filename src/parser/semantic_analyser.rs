@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use std::fmt;
 
 use crate::parser::diagnostic::Diagnostic;
 use crate::parser::parse_state::Counter;
 use crate::{
-    error::{ErrorT, SemanticError, StatementError},
+    error::SemanticError,
     lexer::token::{BuiltInType, Span},
     parser::{
         expression::{Expression, ExpressionT, ValueExpression},
@@ -578,11 +577,11 @@ fn pop_link_tab_exp(
                 }
             }
         },
-        ExpressionT::BinOp { left, op, right } => {
+        ExpressionT::BinOp { left, op: _, right } => {
             pop_link_tab_exp(left.as_ref(), dec_tables, symbol_ctr, symbol_table, diag);
             pop_link_tab_exp(right.as_ref(), dec_tables, symbol_ctr, symbol_table, diag);
         }
-        ExpressionT::UnOp { op, operand } => {
+        ExpressionT::UnOp { operand, .. } => {
             pop_link_tab_exp(&operand, dec_tables, symbol_ctr, symbol_table, diag)
         }
     }

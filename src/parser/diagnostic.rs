@@ -1,5 +1,3 @@
-use std::panic::PanicHookInfo;
-
 use crate::error::*;
 use crate::lexer::token::Span;
 

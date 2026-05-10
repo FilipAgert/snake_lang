@@ -176,7 +176,7 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
     // expect parameter list (int a, int b, bool c = true)
     let opening_brace = state.peek();
     let l_par = TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)));
-    if !matches!(&opening_brace.token_type, l_par) {
+    if !matches!(&opening_brace.token_type, _l_par) {
         state.report(
             opening_brace.span,
             StatementError::ExpectedToken {
@@ -281,7 +281,7 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
 
     let brace = state.next(); // consume opening brace.
     let block = generate_ast_block(state);
-    let (statements, span) = if let Ok((mut statements, mut span)) = block {
+    let (statements, span) = if let Ok((statements, _span)) = block {
         let closing_brace = state.peek();
 
         let span = if !matches!(
@@ -444,15 +444,15 @@ fn next_statement(state: &mut ParseState) -> Result<Result<Statement, Token>, St
 
             let next = next_statement(state);
             // e.g. a block... {}
-            let then_statement = if let (Ok(Ok(statement))) = next {
+            let then_statement = if let Ok(Ok(statement)) = next {
                 statement
             } else {
-                if let (Ok(Err(token))) = next {
+                if let Ok(Err(token)) = next {
                     state.report(
                         token.span,
                         StatementError::UnexpectedToken(token.token_type),
                     );
-                } else if let (Err(err)) = next {
+                } else if let Err(err) = next {
                     state.report(expr.span, err);
                 }
 
@@ -569,7 +569,7 @@ fn generate_ast_block(
                     _ => unreachable!("Should not be a possible return"),
                 }
             }
-        } else if let Err(err) = res {
+        } else if let Err(_err) = res {
             continue;
         }
     }
