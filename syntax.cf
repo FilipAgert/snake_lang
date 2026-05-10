@@ -8,9 +8,13 @@ fn f(int x, bool y, int z) : bool {
         d = d - 2;
     }
     return y;
+
+    return d;
 }
 
 {
     bool bla = 1;
     int a = f(bla, 2);
+
+    a = f(2, true, 3, true, true)
 }

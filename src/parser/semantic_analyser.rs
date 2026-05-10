@@ -155,6 +155,7 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
             body,
             parameters,
             return_type,
+            signature_span,
             ..
         } => {
             for parameter in parameters {
@@ -182,8 +183,9 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
                             diag.push(
                                 statement.span,
                                 SemanticError::IncompatibleReturnType {
-                                    fun_sig: fn_rettype.clone(),
+                                    fun_ret_type: fn_rettype.clone(),
                                     attempted: ret_type,
+                                    function_signature_span: signature_span.clone(),
                                 },
                             );
                         }
@@ -205,10 +207,14 @@ fn type_check_pass_expr(
         ExpressionT::ValueExpression(val) => match val {
             ValueExpression::CallExpression { arguments, .. } => {
                 let fun_decl_statement = dec_tables.ref_table[dec_tables.link_table[expr.node_id]];
-                let parameters: Option<Vec<(&ExpressionType, &Span)>> =
+                let parameters: Option<(Vec<(&ExpressionType, &Span)>, Span)> =
                     match &fun_decl_statement.stype {
                         StatementT::ErrorStatement => None, //
-                        StatementT::FunctionDeclaration { parameters, .. } => {
+                        StatementT::FunctionDeclaration {
+                            parameters,
+                            signature_span,
+                            ..
+                        } => {
                             let argtypes: Vec<(&ExpressionType, &Span)> = parameters
                                 .iter()
                                 .map(|f| {
@@ -221,7 +227,7 @@ fn type_check_pass_expr(
                                     }
                                 })
                                 .collect();
-                            Some(argtypes)
+                            Some((argtypes, signature_span.clone()))
                         }
                         _ => {
                             panic!("Should not enter this branch. Linker stage fucked up.")
@@ -229,7 +235,7 @@ fn type_check_pass_expr(
                     };
 
                 //check if too many or too few arguments supplied.
-                if let Some(v) = &parameters {
+                if let Some((v, fns)) = &parameters {
                     let num_arguments = arguments.len();
                     let num_parameters = v.len();
                     if num_arguments > num_parameters {
@@ -239,11 +245,13 @@ fn type_check_pass_expr(
                             &arguments[num_arguments - 1].span,
                             &arguments[num_arguments - num_excess].span,
                         );
+
                         diag.push(
                             extra_span,
                             SemanticError::TooManyArguments {
                                 limit: num_parameters,
                                 provided: num_arguments,
+                                function_signature_span: *fns,
                             },
                         );
                     } else if num_arguments < num_parameters {
@@ -274,7 +282,7 @@ fn type_check_pass_expr(
                     let argtype = type_check_pass_expr(argument, diag, dec_tables);
 
                     // check that argument types match parameters
-                    if let Some(parameters) = &parameters {
+                    if let Some((parameters, ..)) = &parameters {
                         if let Some((param_type, span)) = parameters.get(i) {
                             if argtype != **param_type
                                 && argtype != ExpressionType::Error
@@ -485,6 +493,7 @@ fn populate_link_table<'a>(
             parameters,
             return_type,
             body,
+            ..
         } => {
             if let Some(symbol) = symbol_table.lookup(identifier)
                 && symbol.depth == symbol_table.depth()
@@ -594,11 +603,11 @@ mod tests {
     use std::os::linux::raw::stat;
 
     use super::*;
+    use crate::error::*;
     use crate::lexer::lexer::scan;
     use crate::parser::diagnostic::*;
     use crate::parser::parse_state::ParseState;
     use crate::parser::statement::generate_ast;
-
     #[test]
     fn test_link_tables() {
         let input = "int a; a = 15;";

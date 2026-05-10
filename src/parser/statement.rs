@@ -19,6 +19,7 @@ pub enum StatementT {
         parameters: Vec<Statement>,
         return_type: ExpressionType,
         body: Vec<Statement>,
+        signature_span: Span,
     },
     Assignment {
         identifier: Box<str>,
@@ -195,6 +196,8 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
         TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Left))),
     ];
 
+    let mut rightmost_span = function_keyword.span;
+
     loop {
         let next = state.peek();
         match next.token_type {
@@ -207,6 +210,7 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
             }
             TokenType::Keyword(Keyword::Declaration(..)) | TokenType::Identifier(..) => {
                 if let Ok(decl) = parse_declaration(state) {
+                    rightmost_span = decl.span.clone();
                     parameters.push(decl);
                 } else {
                     state.synchronize_to(&SYNC_TOKENS);
@@ -243,12 +247,14 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
             },
         );
     } else {
-        state.next();
+        let colon = state.next();
+        rightmost_span = colon.span.clone();
     }
     // expect a ReturnType keyword
     let ret_type = state.peek();
     let ret_type = if let TokenType::Keyword(Keyword::Declaration(decl)) = ret_type.token_type {
-        state.next();
+        let ret_type = state.next();
+        rightmost_span = ret_type.span.clone();
         decl
     } else {
         state.report(
@@ -260,6 +266,8 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
         );
         BuiltInType::Error
     };
+
+    let signature_span = Span::merge(&function_keyword.span, &rightmost_span);
 
     // now we expect a block statement.
     let opening_brace = state.peek();
@@ -326,6 +334,7 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
             parameters: parameters,
             return_type: ret_type.into(),
             body: statements,
+            signature_span: signature_span,
         },
     })
 }

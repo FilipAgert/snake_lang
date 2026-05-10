@@ -19,14 +19,16 @@ pub enum SemanticError {
         right: ExpressionType,
     },
     IncompatibleReturnType {
-        fun_sig: ExpressionType,
+        fun_ret_type: ExpressionType,
         attempted: ExpressionType,
+        function_signature_span: Span,
     },
     UseBeforeDefinition(Box<str>),
     AlreadyDefinedInScope(Box<str>),
     TooManyArguments {
         limit: usize,
         provided: usize,
+        function_signature_span: Span,
     },
     TooFewArguments {
         desired: usize,
@@ -137,7 +139,11 @@ impl std::fmt::Display for SemanticError {
                     id
                 )
             }
-            SemanticError::IncompatibleReturnType { fun_sig, attempted } => {
+            SemanticError::IncompatibleReturnType {
+                fun_ret_type: fun_sig,
+                attempted,
+                ..
+            } => {
                 write!(
                     f,
                     "Function has return type {} while return statement returns type {}.",
@@ -157,6 +163,7 @@ impl std::fmt::Display for SemanticError {
             | SemanticError::TooManyArguments {
                 limit: desired,
                 provided,
+                ..
             } => {
                 write!(
                     f,
@@ -186,9 +193,11 @@ impl SemanticError {
     pub fn detailed_text(&self) -> Option<String> {
         match self {
             SemanticError::AlreadyDefinedInScope(..) => Some(format!("already defined here")),
-            SemanticError::IncompatibleReturnType { fun_sig, attempted } => {
-                Some(format!("should be type {} not {}", fun_sig, attempted))
-            }
+            SemanticError::IncompatibleReturnType {
+                fun_ret_type: fun_sig,
+                attempted,
+                ..
+            } => Some(format!("should be type {} not {}", fun_sig, attempted)),
             SemanticError::IncompatibleTypes { left, right } => {
                 Some(format!("lhs: {}, rhs: {}", left, right))
             }
@@ -198,9 +207,9 @@ impl SemanticError {
             SemanticError::TooFewArguments {
                 desired, provided, ..
             } => Some(format!("missing {} argument(s)", desired - provided)),
-            SemanticError::TooManyArguments { limit, provided } => {
-                Some(format!("{} excess argument(s)", provided - limit))
-            }
+            SemanticError::TooManyArguments {
+                limit, provided, ..
+            } => Some(format!("{} excess argument(s)", provided - limit)),
             SemanticError::UseBeforeDefinition(id) => Some(format!("{} used here", id)),
         }
     }
@@ -212,7 +221,10 @@ impl SemanticError {
             SemanticError::InvalidArgumentType { parameter_type, .. } => {
                 Some(format!("parameter of type {}", parameter_type))
             }
-            SemanticError::IncompatibleReturnType { fun_sig, .. } => Some(format!(
+            SemanticError::IncompatibleReturnType {
+                fun_ret_type: fun_sig,
+                ..
+            } => Some(format!(
                 "function signature specifies {} return type",
                 fun_sig
             )),
@@ -225,7 +237,7 @@ impl SemanticError {
                 Some(format!("missing arguments: [{}]", arglist))
             }
             SemanticError::TooManyArguments { limit, .. } => {
-                Some(format!("the {} legal arguments", limit))
+                Some(format!("the {} function signature", limit))
             }
             _ => None,
         }
@@ -235,10 +247,15 @@ impl SemanticError {
             SemanticError::AlreadyDefinedInScope(..) => {
                 todo!("Don't have original definition span.")
             }
-            SemanticError::IncompatibleReturnType { .. } => {
-                todo!("Don't have span of function signature.")
-            }
+            SemanticError::IncompatibleReturnType {
+                function_signature_span,
+                ..
+            } => Some(function_signature_span),
             SemanticError::InvalidArgumentType { parameter_span, .. } => Some(parameter_span),
+            SemanticError::TooManyArguments {
+                function_signature_span,
+                ..
+            } => Some(function_signature_span),
             SemanticError::TooFewArguments { missing_span, .. } => Some(missing_span),
             SemanticError::UseBeforeDefinition { .. } => {
                 todo!("Maybe should check where defined later")
