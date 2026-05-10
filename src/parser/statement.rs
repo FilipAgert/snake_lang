@@ -306,7 +306,7 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
             );
             span
         } else {
-            closing_brace.span
+            state.next().span
         };
         (statements, Some(Span::merge(&brace.span, &span)))
     } else {
@@ -361,12 +361,28 @@ pub fn generate_ast(state: &mut ParseState) -> Result<(Statement, usize), Statem
     ))
 }
 
+fn expect_consume_semicolon(state: &mut ParseState) {
+    let token = state.peek();
+    if token.token_type != TokenType::Symbol(Symbol::Semicolon) {
+        state.report(
+            token.span,
+            StatementError::ExpectedToken {
+                expected: TokenType::Symbol(Symbol::Semicolon),
+                got: token.token_type.clone(),
+            },
+        );
+    } else {
+        state.next();
+    }
+}
+
 fn next_statement(state: &mut ParseState) -> Result<Result<Statement, Token>, StatementError> {
     let token = state.peek();
     match token.token_type {
         TokenType::Keyword(Keyword::Declaration(_)) => {
             let decl = parse_declaration(state);
             if let Ok(decl) = decl {
+                expect_consume_semicolon(state);
                 return Ok(Ok(decl));
             } else {
                 let err = decl.expect_err("Already checked");
@@ -379,6 +395,7 @@ fn next_statement(state: &mut ParseState) -> Result<Result<Statement, Token>, St
             if let TokenType::Identifier(..) = state.peek_at(1).token_type {
                 let decl = parse_declaration(state);
                 if let Ok(decl) = decl {
+                    expect_consume_semicolon(state);
                     return Ok(Ok(decl));
                 } else {
                     let err = decl.expect_err("Checked for error.");
@@ -398,6 +415,7 @@ fn next_statement(state: &mut ParseState) -> Result<Result<Statement, Token>, St
                     };
                     state.next(); // consume equal sign
                     let assignment = parse_expression(state, 0);
+                    expect_consume_semicolon(state);
                     return Ok(Ok(Statement {
                         span: Span::merge(&token_span, &assignment.span),
                         stype: StatementT::Assignment {
@@ -407,7 +425,9 @@ fn next_statement(state: &mut ParseState) -> Result<Result<Statement, Token>, St
                         node_id: state.next_id(),
                     }));
                 } else {
-                    return Ok(Ok(parse_expression(state, 0).into()));
+                    let exp = parse_expression(state, 0);
+                    expect_consume_semicolon(state);
+                    return Ok(Ok(exp.into()));
                 }
             }
         }
@@ -418,6 +438,7 @@ fn next_statement(state: &mut ParseState) -> Result<Result<Statement, Token>, St
         TokenType::Keyword(Keyword::Return) => {
             let ret = state.next();
             let ret_expr = parse_expression(state, 0);
+            expect_consume_semicolon(state);
             return Ok(Ok(Statement {
                 stype: StatementT::ReturnStatement(ret_expr.etype),
                 span: Span::merge(&ret.span, &ret_expr.span),
@@ -492,7 +513,9 @@ fn next_statement(state: &mut ParseState) -> Result<Result<Statement, Token>, St
             }))
         }
         TokenType::Op(Operator::Minus) | TokenType::Literal(_) => {
-            return Ok(Ok(parse_expression(state, 0).into()));
+            let exp = parse_expression(state, 0).into();
+            expect_consume_semicolon(state);
+            return Ok(Ok(exp));
         }
         TokenType::Symbol(Symbol::Semicolon) => {
             return Ok(Err(state.next()));
@@ -544,27 +567,12 @@ fn generate_ast_block(
         if let Ok(statement) = res {
             if let Ok(statement) = statement {
                 block_statements.push(statement);
-                let next_one = state.peek();
-                match next_one.token_type {
-                    TokenType::Symbol(Symbol::Semicolon)
-                    | TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right)))
-                    | TokenType::EOF => {
-                        state.next();
-                    }
-                    _ => {
-                        state.report(
-                            next_one.span,
-                            StatementError::ExpectedToken {
-                                expected: TokenType::Symbol(Symbol::Semicolon),
-                                got: next_one.token_type.clone(),
-                            },
-                        );
-                    }
-                }
             } else if let Err(token) = statement {
                 match token.token_type {
                     TokenType::EOF => break,
-                    TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => break,
+                    TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => {
+                        break;
+                    }
                     TokenType::Symbol(Symbol::Semicolon) => continue,
                     _ => unreachable!("Should not be a possible return"),
                 }
