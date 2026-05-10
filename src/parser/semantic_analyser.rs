@@ -152,10 +152,21 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
                 dec_tables,
             );
         }
+        StatementT::If {
+            conditional,
+            then,
+            el,
+        } => {
+            type_check_pass_expr(conditional, diag, dec_tables);
+            type_check_pass(then, diag, dec_tables);
+            if let Some(el_block) = el {
+                type_check_pass(el_block, diag, dec_tables);
+            }
+        }
         StatementT::FunctionDeclaration {
-            body: body,
-            parameters: parameters,
-            return_type: return_type,
+            body,
+            parameters,
+            return_type,
             ..
         } => {
             for parameter in parameters {
@@ -410,6 +421,21 @@ fn populate_link_table(
                 for statement in body {
                     populate_link_table(statement, dec_tables, symbol_ctr, symbol_table, diag);
                 }
+                symbol_table.pop();
+            }
+        }
+        StatementT::If {
+            conditional,
+            then,
+            el,
+        } => {
+            pop_link_tab_exp(conditional, dec_tables, symbol_ctr, symbol_table, diag);
+            symbol_table.push_empty();
+            populate_link_table(then.as_ref(), dec_tables, symbol_ctr, symbol_table, diag);
+            symbol_table.pop();
+            if let Some(else_block) = el {
+                symbol_table.push_empty();
+                populate_link_table(else_block, dec_tables, symbol_ctr, symbol_table, diag);
                 symbol_table.pop();
             }
         }
