@@ -117,6 +117,9 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
             ..
         } => {
             let lhs_type = &dec_tables.type_table[dec_tables.link_table[node.node_id]];
+            if let ExpressionType::Custom(..) = lhs_type {
+                todo!("not implemented custom types yet.");
+            }
             let rhs_type = &type_check_pass_expr(value, diag, dec_tables);
             if lhs_type != rhs_type
                 && *lhs_type != ExpressionType::Error
@@ -132,7 +135,12 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
                 );
             }
         }
-        StatementT::Declaration { .. } => {} // already checked in above branch.
+        StatementT::Declaration { .. } => {
+            let lhs_type = &dec_tables.type_table[dec_tables.link_table[node.node_id]];
+            if let ExpressionType::Custom(..) = lhs_type {
+                todo!("not implemented custom types yet.");
+            }
+        } // already checked in above branch.
         StatementT::ExpressionStatement(expr) | StatementT::ReturnStatement(expr) => {
             type_check_pass_expr(
                 &Expression {
