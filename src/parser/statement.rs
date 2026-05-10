@@ -1,6 +1,7 @@
 use crate::lexer::token::*;
 use crate::parser::expression::*;
 use crate::parser::parse_state::ParseState;
+use crate::parser::semantic_analyser::SemanticError;
 use std::iter::Peekable;
 use std::slice::Iter;
 use std::str::Matches;
@@ -293,6 +294,18 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
             parse_expression(state, 0)
         };
 
+        let semicolon = state.peek();
+        if !matches!(semicolon.token_type, TokenType::Symbol(Symbol::Semicolon)) {
+            state.report(
+                semicolon.span.clone(),
+                StatementError::ExpectedToken {
+                    expected: TokenType::Symbol(Symbol::Semicolon),
+                    got: semicolon.token_type.clone(),
+                },
+            );
+        } else {
+            state.next();
+        }
         let closing_brace = state.peek();
 
         let span = if !matches!(
@@ -532,5 +545,19 @@ mod tests {
             }
         }
         println!("{:?}", ast);
+    }
+
+    #[test]
+    fn test_build_fn() {
+        let input = "fn f(int a, int b, bool c): {
+        int x = 2;
+        int a = 4;
+        c = b + y;
+        return c
+     }";
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let (ast, _) = generate_ast(&mut state).unwrap();
+        assert_eq!(diag.get_errors().len(), 2);
     }
 }
