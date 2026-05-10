@@ -147,7 +147,7 @@ impl std::fmt::Display for SemanticError {
             SemanticError::IncompatibleTypes { left, right } => {
                 write!(
                     f,
-                    "Lhs has type: '{}' which is incompatible with '{}'.",
+                    "Lhs has type: {} which is incompatible with {}.",
                     left, right
                 )
             }
@@ -165,7 +165,7 @@ impl std::fmt::Display for SemanticError {
                 )
             }
             SemanticError::UseBeforeDefinition(id) => {
-                write!(f, "Use of '{}' before its definition", id)
+                write!(f, "Use of '{}' before its definition.", id)
             }
             SemanticError::InvalidArgumentType {
                 arg_type,
@@ -174,7 +174,7 @@ impl std::fmt::Display for SemanticError {
             } => {
                 write!(
                     f,
-                    "Attempting to call function with type {} when signature requires {}",
+                    "Attempting to call function with type {} when signature requires {}.",
                     arg_type, parameter_type
                 )
             }
@@ -185,19 +185,19 @@ impl std::fmt::Display for SemanticError {
 impl SemanticError {
     pub fn detailed_text(&self) -> Option<String> {
         match self {
-            SemanticError::AlreadyDefinedInScope(..) => Some(format!("Already defined here.")),
+            SemanticError::AlreadyDefinedInScope(..) => Some(format!("already defined here")),
             SemanticError::IncompatibleReturnType { fun_sig, attempted } => {
-                Some(format!("Should be type {} not {}", fun_sig, attempted))
+                Some(format!("should be type {} not {}", fun_sig, attempted))
             }
             SemanticError::IncompatibleTypes { left, right } => {
-                Some(format!("{}  and   {}", left, right))
+                Some(format!("{} and {}", left, right))
             }
             SemanticError::InvalidArgumentType { arg_type, .. } => {
-                Some(format!("Arg of type {}.", arg_type))
+                Some(format!("arg of type {}.", arg_type))
             }
             SemanticError::TooFewArguments {
                 desired, provided, ..
-            } => Some(format!("Missing {} argument(s)", desired - provided)),
+            } => Some(format!("missing {} argument(s)", desired - provided)),
             SemanticError::TooManyArguments { limit, provided } => {
                 Some(format!("{} excess argument(s)", provided - limit))
             }
@@ -207,13 +207,13 @@ impl SemanticError {
     pub fn secondary_text(&self) -> Option<String> {
         match self {
             SemanticError::AlreadyDefinedInScope(id) => {
-                Some(format!("Original definition of '{}' is here", id))
+                Some(format!("original definition of '{}' is here", id))
             }
             SemanticError::InvalidArgumentType { parameter_type, .. } => {
-                Some(format!("Parameter of type {}", parameter_type))
+                Some(format!("parameter of type {}", parameter_type))
             }
             SemanticError::IncompatibleReturnType { fun_sig, .. } => Some(format!(
-                "Function signature specifies {} return type",
+                "function signature specifies {} return type",
                 fun_sig
             )),
             SemanticError::TooFewArguments { missing_types, .. } => {
@@ -222,10 +222,10 @@ impl SemanticError {
                     .map(|t| t.to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
-                Some(format!("Missing arguments: [{}]", arglist))
+                Some(format!("missing arguments: [{}]", arglist))
             }
             SemanticError::TooManyArguments { limit, .. } => {
-                Some(format!("The {} legal arguments", limit))
+                Some(format!("the {} legal arguments", limit))
             }
             _ => None,
         }
