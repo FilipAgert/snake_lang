@@ -6,6 +6,8 @@ pub struct ParseState<'a> {
     tokens: VecDeque<Token>,
     counter: Counter,
     diag: &'a mut Diagnostic,
+    anon_fun: Counter,
+    anon_var: Counter,
 }
 static EOF_TOKEN: Token = Token {
     token_type: TokenType::EOF,
@@ -29,11 +31,24 @@ impl<'a> ParseState<'a> {
         return self.counter.next_id();
     }
 
+    pub fn next_anon_fun(&mut self) -> Box<str> {
+        let next_ctr = self.anon_fun.next_id();
+        let str = format!("fun_{}", next_ctr);
+        str.into_boxed_str()
+    }
+    pub fn next_anon_var(&mut self) -> Box<str> {
+        let next_ctr = self.anon_var.next_id();
+        let str = format!("var_{}", next_ctr);
+        str.into_boxed_str()
+    }
+
     pub fn new(tokens: Vec<Token>, diag: &'a mut Diagnostic) -> Self {
         Self {
             tokens: tokens.into(),
             counter: Counter::new(),
             diag: diag,
+            anon_fun: Counter::new(),
+            anon_var: Counter::new(),
         }
     }
 

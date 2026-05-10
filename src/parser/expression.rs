@@ -11,9 +11,9 @@ use std::slice::Iter;
 #[derive(Debug, PartialEq, Clone)]
 pub enum ValueExpression {
     Literal(Literal),
-    Identifier(String),
+    Identifier(Box<str>),
     CallExpression {
-        id: String,
+        id: Box<str>,
         arguments: Vec<Expression>,
     },
 }
@@ -253,7 +253,7 @@ mod tests {
                 );
                 assert_eq!(
                     right_inner.etype,
-                    ExpressionT::ValueExpression(ValueExpression::Identifier("x".to_string()))
+                    ExpressionT::ValueExpression(ValueExpression::Identifier(Box::from("x")))
                 );
                 assert_eq!(op_inner, Operator::Times);
             } else {
@@ -348,14 +348,14 @@ mod tests {
             if let ExpressionT::ValueExpression(ValueExpression::CallExpression { id, arguments }) =
                 left.etype
             {
-                assert_eq!(id, "my_func");
+                assert_eq!(id, Box::from("my_func"));
                 assert_eq!(
                     arguments[0].etype,
-                    ExpressionT::ValueExpression(ValueExpression::Identifier("a".to_string()))
+                    ExpressionT::ValueExpression(ValueExpression::Identifier(Box::from("a")))
                 );
                 assert_eq!(
                     arguments[1].etype,
-                    ExpressionT::ValueExpression(ValueExpression::Identifier("b".to_string()))
+                    ExpressionT::ValueExpression(ValueExpression::Identifier(Box::from("b")))
                 );
                 assert_eq!(arguments.len(), 2);
             }

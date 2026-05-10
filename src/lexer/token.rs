@@ -26,7 +26,7 @@ impl Span {
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     Keyword(Keyword),
-    Identifier(String),
+    Identifier(Box<str>),
     Op(Operator),
     Literal(Literal),
     Symbol(Symbol),
@@ -69,7 +69,7 @@ impl TokenType {
         if let Some(literal) = Literal::from_str(str) {
             return TokenType::Literal(literal);
         }
-        TokenType::Identifier(str.to_string())
+        TokenType::Identifier(Box::from(str))
     }
 }
 #[derive(Debug, PartialEq, Clone)]

@@ -146,7 +146,7 @@ mod tests {
         );
         assert_eq!(
             result[1].token_type,
-            TokenType::Identifier("val".to_string())
+            TokenType::Identifier(Box::from("val"))
         );
         assert_eq!(result[2].token_type, TokenType::Op(Operator::Equal));
         assert_eq!(
@@ -158,9 +158,9 @@ mod tests {
             result[5].token_type,
             TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Int))
         );
-        assert_eq!(result[6].token_type, TokenType::Identifier("x".to_string()));
+        assert_eq!(result[6].token_type, TokenType::Identifier(Box::from("x")));
         assert_eq!(result[7].token_type, TokenType::Op(Operator::Equal));
-        assert_eq!(result[8].token_type, TokenType::Identifier("f".to_string()));
+        assert_eq!(result[8].token_type, TokenType::Identifier(Box::from("f")));
         assert_eq!(
             result[9].token_type,
             TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)))

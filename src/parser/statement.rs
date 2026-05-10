@@ -10,18 +10,18 @@ pub enum StatementT {
         statements: Vec<Statement>,
     },
     Declaration {
-        identifier: String,
+        identifier: Box<str>,
         keyword: DeclarationKeyword,
         assignment: Option<Expression>,
     },
     FunctionDeclaration {
-        identifier: String,
+        identifier: Box<str>,
         parameters: Vec<Statement>,
         return_type: DeclarationKeyword,
         body: Vec<Statement>,
     },
     Assignment {
-        identifier: String,
+        identifier: Box<str>,
         value: Expression,
     },
     Block {
@@ -41,10 +41,9 @@ pub struct Statement {
 pub enum StatementError {
     ExpressionError(ExpressionError),
     UnexpectedEOF,
-    UnexpectedToken,
+    UnexpectedToken(TokenType),
+    ExpectedToken { expected: TokenType, got: TokenType },
     DeclarationError(DeclarationError),
-    ExpectedClosingBrace,
-    ExpectedSemiColon,
     AssignmentToNonId,
 }
 
@@ -114,7 +113,9 @@ fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError
             Some(assignment_expr)
         }
         _ => {
-            return Err(StatementError::UnexpectedToken);
+            return Err(StatementError::UnexpectedToken(
+                assignment_token.token_type.clone(),
+            ));
         }
     };
     let span = Span::merge(
@@ -139,14 +140,36 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
     // then we expect a return type by ': type'
     // then a function body surrounded by braces.
     let function_keyword = state.next();
+    if !matches!(
+        function_keyword.token_type,
+        TokenType::Keyword(Keyword::FunctionDeclaration),
+    ) {
+        let err = StatementError::ExpectedToken {
+            expected: TokenType::Keyword(Keyword::FunctionDeclaration),
+            got: function_keyword.token_type,
+        };
+        state.report(function_keyword.span, err.clone());
+        return Err(err);
+    }
+
+    let identifier = state.next();
+    let id = if let TokenType::Identifier(id) = identifier.token_type {
+        id
+    } else {
+        state.next_anon_fun()
+    };
 
     todo!();
 }
 pub fn generate_ast(state: &mut ParseState) -> Result<(Statement, usize), StatementError> {
     let root_id = state.next_id();
     let (root_statements, span) = generate_ast_block(state)?;
-    if !matches!(state.next().token_type, TokenType::EOF) {
-        return Err(StatementError::UnexpectedToken);
+    let token = state.next();
+    if !matches!(token.token_type, TokenType::EOF) {
+        return Err(StatementError::ExpectedToken {
+            expected: TokenType::EOF,
+            got: token.token_type,
+        });
     }
     let size = state.next_id();
 
@@ -178,7 +201,13 @@ fn generate_ast_block(
                 //expect and consume semicolon.
                 let next_token = state.peek();
                 if !matches!(next_token.token_type, TokenType::Symbol(Symbol::Semicolon),) {
-                    state.report(next_token.span.clone(), StatementError::ExpectedSemiColon);
+                    state.report(
+                        next_token.span.clone(),
+                        StatementError::ExpectedToken {
+                            expected: TokenType::Symbol(Symbol::Semicolon),
+                            got: next_token.token_type.clone(),
+                        },
+                    );
                     // if not a semicolon, report it, but continue as usual.
                 } else {
                     state.next(); // consume semicolon if its there. 
@@ -228,7 +257,12 @@ fn generate_ast_block(
                     closing_brace.token_type,
                     TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right)))
                 ) {
-                    return Err(StatementError::ExpectedClosingBrace);
+                    return Err(StatementError::ExpectedToken {
+                        expected: TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(
+                            Side::Right,
+                        ))),
+                        got: closing_brace.token_type.clone(),
+                    });
                 }
                 let closing_brace = state.next();
                 let span = Span::merge(&brace.span, &closing_brace.span);
@@ -245,7 +279,7 @@ fn generate_ast_block(
                 break;
             }
             _ => {
-                return Err(StatementError::UnexpectedToken);
+                return Err(StatementError::UnexpectedToken(token.token_type.clone()));
             }
         }
     }
@@ -289,13 +323,13 @@ mod tests {
                 ..
             } = &decl.stype
             {
-                assert_eq!(identifier, "a");
+                assert_eq!(*identifier, "a".into());
                 assert_eq!(*keyword, DeclarationKeyword::Int);
             }
             let ass = &statements[1].stype;
             assert!(matches!(ass, StatementT::Assignment { .. }));
             if let StatementT::Assignment { identifier, value } = &decl.stype {
-                assert_eq!(identifier, "a");
+                assert_eq!(*identifier, "a".into());
                 assert!(matches!(&value.etype, ExpressionT::BinOp { .. }));
             }
         }

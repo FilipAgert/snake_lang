@@ -40,16 +40,16 @@ impl From<DeclarationKeyword> for ReturnType {
 struct Symbol {
     symbol_id: usize,
     depth: usize,
-    identifier: String,
+    identifier: Box<str>,
 }
 
 struct SymbolTable {
-    scopes: Vec<HashMap<String, Symbol>>,
+    scopes: Vec<HashMap<Box<str>, Symbol>>,
 }
 
 impl SymbolTable {
     pub const GLOBAL_SCOPE_DEPTH: usize = 1;
-    fn define(self: &mut Self, id: String, node_id: usize) {
+    fn define(self: &mut Self, id: Box<str>, node_id: usize) {
         let depth = self.depth();
         if let Some(current_scope) = self.scopes.last_mut() {
             current_scope.insert(
@@ -209,7 +209,7 @@ pub fn get_dec_tables(root: &Statement, diag: &mut Diagnostic, num_ids: usize) -
 }
 
 fn define_symbol(
-    id: String,
+    id: Box<str>,
     node_id: usize,
     symbol_ctr: &mut Counter,
     link_table: &mut Vec<usize>,
