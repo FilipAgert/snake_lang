@@ -1,6 +1,12 @@
 fn f(int x, bool y, z) : bool {
     int d = 4;
     g + x;
+
+    if y == true{
+        d = d + 4;
+    } else {
+        d = d - 2;
+    }
     return y;
 }
 
@@ -9,7 +15,7 @@ fn f(int x, bool y, z) : bool {
     int b = 4
     x = 4;
     int c = d - (x + 4;
-    int d;
+    int d = f(c, b, c);
 
     bool eft = true;
     bool bla = false;

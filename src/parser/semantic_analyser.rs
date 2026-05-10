@@ -583,4 +583,30 @@ mod tests {
             _ => assert!(false),
         }
     }
+
+    #[test]
+    fn test_function_call() {
+        let input = "fn foo(int x) : bool {
+                            bool a = true;
+                            return a;
+                            }
+                            fn main() : void {
+                                int x = foo(4);
+                            }";
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let (mut root, mut size) = generate_ast(&mut state).unwrap();
+        let result = get_dec_tables(&root, &mut diag, size);
+        diag.print_errors(input);
+        assert!(!diag.has_errors());
+        type_check_pass(&root, &mut diag, &result);
+        let err = &diag.get_errors()[0];
+        diag.print_errors(input);
+        match &err.error_t {
+            ErrorT::SemanticError(SemanticError::IncompatibleTypes { left, right }) => {
+                assert!(true)
+            }
+            _ => assert!(false),
+        }
+    }
 }

@@ -306,8 +306,7 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
             );
             span
         } else {
-            let b = state.next();
-            b.span
+            closing_brace.span
         };
         (statements, Some(Span::merge(&brace.span, &span)))
     } else {
@@ -545,6 +544,22 @@ fn generate_ast_block(
         if let Ok(statement) = res {
             if let Ok(statement) = statement {
                 block_statements.push(statement);
+                let next_one = state.peek();
+                match next_one.token_type {
+                    TokenType::Symbol(Symbol::Semicolon)
+                    | TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => {
+                        state.next();
+                    }
+                    _ => {
+                        state.report(
+                            next_one.span,
+                            StatementError::ExpectedToken {
+                                expected: TokenType::Symbol(Symbol::Semicolon),
+                                got: next_one.token_type.clone(),
+                            },
+                        );
+                    }
+                }
             } else if let Err(token) = statement {
                 match token.token_type {
                     TokenType::EOF => break,
