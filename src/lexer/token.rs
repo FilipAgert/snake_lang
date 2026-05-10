@@ -1,3 +1,5 @@
+use std::fmt;
+use std::str::FromStr;
 #[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     pub token_type: TokenType,
@@ -64,7 +66,7 @@ impl Literal {
 
 impl TokenType {
     pub fn from_str(str: &str) -> Self {
-        if let Some(op) = Operator::from_str(str) {
+        if let Ok(op) = Operator::from_str(str) {
             return TokenType::Op(op);
         }
         if str.len() == 1 {
@@ -119,28 +121,31 @@ pub enum Operator {
     Xor,        // ^
 }
 
-impl Operator {
-    pub fn from_str(str: &str) -> Option<Operator> {
-        match str {
-            "=" => Some(Operator::Equal),
-            "+" => Some(Operator::Plus),
-            "/" => Some(Operator::Divide),
-            "-" => Some(Operator::Minus),
-            "*" => Some(Operator::Times),
-            "!" => Some(Operator::Not),
-            "<" => Some(Operator::Lt),
-            "<=" => Some(Operator::Le),
-            ">" => Some(Operator::Gt),
-            ">=" => Some(Operator::Ge),
-            "==" => Some(Operator::EqualEqual),
-            "!=" => Some(Operator::NotEqual),
-            "&&" => Some(Operator::And),
-            "||" => Some(Operator::Or),
-            "^" => Some(Operator::Xor),
-            _ => None,
+impl FromStr for Operator {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "+" => Ok(Operator::Plus),
+            "=" => Ok(Operator::Equal),
+            "*" => Ok(Operator::Times),
+            "/" => Ok(Operator::Divide),
+            "-" => Ok(Operator::Minus),
+            "<" => Ok(Operator::Lt),
+            "<=" => Ok(Operator::Le),
+            ">" => Ok(Operator::Gt),
+            ">=" => Ok(Operator::Ge),
+            "==" => Ok(Operator::EqualEqual),
+            "!" => Ok(Operator::Not),
+            "&&" => Ok(Operator::And),
+            "||" => Ok(Operator::Or),
+            "!=" => Ok(Operator::NotEqual),
+            "^" => Ok(Operator::Xor),
+            _ => Err(format!("Invalid operator: {}", s)),
         }
     }
-
+}
+impl Operator {
     pub fn precedence_value(self: &Self) -> i32 {
         match &self {
             Operator::Times => 20,
@@ -189,6 +194,7 @@ impl Symbol {
         }
     }
 }
+
 impl Bracket {
     pub fn from_ch(c: char) -> Option<Bracket> {
         match c {
@@ -240,6 +246,98 @@ impl From<Literal> for BuiltInType {
         match value {
             Literal::Integer(..) => BuiltInType::Int,
             Literal::Bool(..) => BuiltInType::Bool,
+        }
+    }
+}
+
+impl fmt::Display for BuiltInType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            BuiltInType::Int => "int",
+            BuiltInType::Void => "void",
+            BuiltInType::Bool => "bool",
+            BuiltInType::Error => "err",
+        };
+        write!(f, "{}", s)
+    }
+}
+impl fmt::Display for Keyword {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Keyword::Declaration(t) => write!(f, "{}", t),
+            Keyword::FunctionDeclaration => write!(f, "fn"),
+            Keyword::Return => write!(f, "return"),
+            Keyword::If => write!(f, "if"),
+            Keyword::Else => write!(f, "else"),
+            Keyword::Struct => write!(f, "struct"),
+        }
+    }
+}
+
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Symbol::Bracket(b) => write!(f, "{}", b),
+            Symbol::Comma => write!(f, ","),
+            Symbol::Colon => write!(f, ":"),
+            Symbol::Semicolon => write!(f, ";"),
+        }
+    }
+}
+impl fmt::Display for Bracket {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let c = match self {
+            Bracket::Parenthesis(Side::Left) => '(',
+            Bracket::Parenthesis(Side::Right) => ')',
+            Bracket::Square(Side::Left) => '[',
+            Bracket::Square(Side::Right) => ']',
+            Bracket::CurlyBrace(Side::Left) => '{',
+            Bracket::CurlyBrace(Side::Right) => '}',
+        };
+        write!(f, "{}", c)
+    }
+}
+
+impl fmt::Display for Operator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let symbol = match self {
+            Operator::Plus => "+",
+            Operator::Equal => "=",
+            Operator::Times => "*",
+            Operator::Divide => "/",
+            Operator::Minus => "-",
+            Operator::Lt => "<",
+            Operator::Le => "<=",
+            Operator::Gt => ">",
+            Operator::Ge => ">=",
+            Operator::EqualEqual => "==",
+            Operator::Not => "!",
+            Operator::And => "&&",
+            Operator::Or => "||",
+            Operator::NotEqual => "!=",
+            Operator::Xor => "^",
+        };
+        write!(f, "{}", symbol)
+    }
+}
+
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Literal::Integer(val) => write!(f, "{}", val),
+            Literal::Bool(val) => write!(f, "{}", val),
+        }
+    }
+}
+impl fmt::Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TokenType::Keyword(k) => write!(f, "{}", k),
+            TokenType::Identifier(id) => write!(f, "{}", id),
+            TokenType::Op(op) => write!(f, "{}", op),
+            TokenType::Literal(lit) => write!(f, "{}", lit),
+            TokenType::Symbol(sym) => write!(f, "{}", sym),
+            TokenType::EOF => write!(f, "EOF"),
         }
     }
 }
