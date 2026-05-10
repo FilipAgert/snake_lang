@@ -1,6 +1,7 @@
 use crate::lexer::token::*;
 use crate::parser::expression::*;
 use crate::parser::parse_state::ParseState;
+use crate::parser::semantic_analyser::ExpressionType;
 use crate::parser::semantic_analyser::SemanticError;
 use std::iter::Peekable;
 use std::slice::Iter;
@@ -13,13 +14,13 @@ pub enum StatementT {
     },
     Declaration {
         identifier: Box<str>,
-        keyword: DeclarationKeyword,
+        keyword: ExpressionType,
         assignment: Option<Expression>,
     },
     FunctionDeclaration {
         identifier: Box<str>,
         parameters: Vec<Statement>,
-        return_type: DeclarationKeyword,
+        return_type: ExpressionType,
         body: Vec<Statement>,
     },
     Assignment {
@@ -73,7 +74,7 @@ fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError
             state.report::<StatementError>(
                 peeked_token.span,
                 StatementError::ExpectedToken {
-                    expected: TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Error)),
+                    expected: TokenType::Keyword(Keyword::Declaration(BuiltInType::Error)),
                     got: peeked_token.token_type.clone(),
                 },
             );
@@ -125,7 +126,7 @@ fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError
         node_id: state.next_id(),
         stype: StatementT::Declaration {
             identifier: id,
-            keyword: declaration_value.unwrap_or(DeclarationKeyword::Error),
+            keyword: declaration_value.unwrap_or(BuiltInType::Error).into(),
             assignment: assignment,
         },
         span: span,
@@ -246,11 +247,11 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
         state.report(
             ret_type.span,
             StatementError::ExpectedToken {
-                expected: TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Void)),
+                expected: TokenType::Keyword(Keyword::Declaration(BuiltInType::Void)),
                 got: ret_type.token_type.clone(),
             },
         );
-        DeclarationKeyword::Error
+        BuiltInType::Error
     };
 
     // now we expect a block statement.
@@ -302,9 +303,9 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
         state.synchronize_to(&[
             TokenType::Symbol(Symbol::Semicolon),
             TokenType::Keyword(Keyword::FunctionDeclaration),
-            TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Bool)),
-            TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Int)),
-            TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Void)),
+            TokenType::Keyword(Keyword::Declaration(BuiltInType::Bool)),
+            TokenType::Keyword(Keyword::Declaration(BuiltInType::Int)),
+            TokenType::Keyword(Keyword::Declaration(BuiltInType::Void)),
         ]);
         (Vec::new(), None)
     };
@@ -317,7 +318,7 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
         stype: StatementT::FunctionDeclaration {
             identifier: id,
             parameters: parameters,
-            return_type: ret_type,
+            return_type: ret_type.into(),
             body: statements,
         },
     })
@@ -499,7 +500,7 @@ mod tests {
             } = &decl.stype
             {
                 assert_eq!(*identifier, "a".into());
-                assert_eq!(*keyword, DeclarationKeyword::Int);
+                assert_eq!(*keyword, BuiltInType::Int.into());
             }
             let ass = &statements[1].stype;
             assert!(matches!(ass, StatementT::Assignment { .. }));
@@ -522,6 +523,7 @@ mod tests {
         let mut diag = Diagnostic::new();
         let mut state = ParseState::new(scan(input), &mut diag);
         let (ast, _) = generate_ast(&mut state).unwrap();
+        diag.print_errors(input);
         assert_eq!(diag.get_errors().len(), 2);
     }
 }

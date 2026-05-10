@@ -6,7 +6,7 @@ use crate::parser::diagnostic::Diagnostic;
 use crate::parser::expression;
 use crate::parser::parse_state::Counter;
 use crate::{
-    lexer::token::{DeclarationKeyword, Literal, Span},
+    lexer::token::{BuiltInType, Literal, Span},
     parser::{
         expression::{Expression, ExpressionT, ValueExpression},
         statement::{self, *},
@@ -15,29 +15,30 @@ use crate::{
 #[derive(Debug)]
 pub enum SemanticError {
     IncompatibleTypes {
-        left: ReturnType,
-        right: ReturnType,
+        left: ExpressionType,
+        right: ExpressionType,
     },
     IncompatibleReturnType {
-        fun_sig: ReturnType,
-        attempted: ReturnType,
+        fun_sig: ExpressionType,
+        attempted: ExpressionType,
     },
     UseBeforeDefinition,
     AlreadyDefinedInScope,
 }
 #[derive(Clone, PartialEq, Debug)]
-enum ReturnType {
-    Standard(DeclarationKeyword),
-    Custom(usize), // custom datatype: by string.
+pub enum ExpressionType {
+    Standard(BuiltInType),
+    Pointer(Box<ExpressionType>),
+    Custom(usize), // custom datatype
     Error,         // Compiler could not determine type.
 }
 
-impl From<DeclarationKeyword> for ReturnType {
-    fn from(value: DeclarationKeyword) -> Self {
-        if DeclarationKeyword::Error == value {
-            ReturnType::Error
+impl From<BuiltInType> for ExpressionType {
+    fn from(value: BuiltInType) -> Self {
+        if BuiltInType::Error == value {
+            ExpressionType::Error
         } else {
-            ReturnType::Standard(value)
+            ExpressionType::Standard(value)
         }
     }
 }
@@ -100,7 +101,7 @@ impl SymbolTable {
 #[derive(Debug)]
 pub struct DecTables {
     link_table: Vec<usize>,
-    type_table: Vec<ReturnType>,
+    type_table: Vec<ExpressionType>,
 }
 
 pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &DecTables) {
@@ -118,8 +119,8 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
             let lhs_type = &dec_tables.type_table[dec_tables.link_table[node.node_id]];
             let rhs_type = &type_check_pass_expr(value, diag, dec_tables);
             if lhs_type != rhs_type
-                && *lhs_type != ReturnType::Error
-                && *rhs_type != ReturnType::Error
+                && *lhs_type != ExpressionType::Error
+                && *rhs_type != ExpressionType::Error
             {
                 // check for error so we do not spawn unecessarily many errors.
                 diag.push(
@@ -166,15 +167,15 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
                             dec_tables,
                         );
 
-                        let fn_rettype: ReturnType = (*return_type).into();
-                        if ret_type != fn_rettype
-                            && ret_type != ReturnType::Error
-                            && fn_rettype != ReturnType::Error
+                        let fn_rettype: &ExpressionType = return_type;
+                        if ret_type != *fn_rettype
+                            && ret_type != ExpressionType::Error
+                            && *fn_rettype != ExpressionType::Error
                         {
                             diag.push(
                                 statement.span,
                                 SemanticError::IncompatibleReturnType {
-                                    fun_sig: fn_rettype,
+                                    fun_sig: fn_rettype.clone(),
                                     attempted: ret_type,
                                 },
                             );
@@ -191,9 +192,9 @@ fn type_check_pass_expr(
     expr: &Expression,
     diag: &mut Diagnostic,
     dec_tables: &DecTables,
-) -> ReturnType {
+) -> ExpressionType {
     match &expr.etype {
-        ExpressionT::Error => ReturnType::Standard(DeclarationKeyword::Error),
+        ExpressionT::Error => ExpressionType::Standard(BuiltInType::Error),
         ExpressionT::ValueExpression(val) => match val {
             ValueExpression::CallExpression { arguments, .. } => {
                 for arg in arguments {
@@ -202,7 +203,7 @@ fn type_check_pass_expr(
                 dec_tables.type_table[dec_tables.link_table[expr.node_id]].clone() // return type of function.
             }
             ValueExpression::Literal(l) => {
-                let decl: DeclarationKeyword = l.clone().into();
+                let decl: BuiltInType = l.clone().into();
                 decl.into()
             }
             ValueExpression::Identifier(_) => {
@@ -214,7 +215,7 @@ fn type_check_pass_expr(
             let right_type = type_check_pass_expr(&right, diag, dec_tables);
 
             if left_type != right_type {
-                if left_type != ReturnType::Error && right_type != ReturnType::Error {
+                if left_type != ExpressionType::Error && right_type != ExpressionType::Error {
                     diag.push(
                         expr.span,
                         SemanticError::IncompatibleTypes {
@@ -223,7 +224,7 @@ fn type_check_pass_expr(
                         },
                     );
                 }
-                ReturnType::Error
+                ExpressionType::Error
             } else {
                 left_type
             }
@@ -319,7 +320,7 @@ fn populate_link_table(
                     &mut dec_tables.link_table,
                     symbol_table,
                 );
-                dec_tables.type_table.push(ReturnType::Error);
+                dec_tables.type_table.push(ExpressionType::Error);
                 diag.push(statement.span, SemanticError::UseBeforeDefinition);
             }
         }
@@ -424,7 +425,7 @@ fn pop_link_tab_exp(
                 } else {
                     diag.push(expression.span, SemanticError::UseBeforeDefinition);
                     dec_tables.link_table[expression.node_id] = symbol_ctr.next_id();
-                    dec_tables.type_table.push(ReturnType::Error);
+                    dec_tables.type_table.push(ExpressionType::Error);
                     // should we define the symbol here? unclear. probably not.
                 }
             }
@@ -476,7 +477,7 @@ mod tests {
 
         assert!(matches!(
             tables.type_table[decl_id],
-            ReturnType::Standard(DeclarationKeyword::Int)
+            ExpressionType::Standard(BuiltInType::Int)
         ));
     }
     #[test]

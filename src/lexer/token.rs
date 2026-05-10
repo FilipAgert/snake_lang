@@ -74,13 +74,13 @@ impl TokenType {
 }
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
-    Declaration(DeclarationKeyword),
+    Declaration(BuiltInType),
     FunctionDeclaration,
     Return,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum DeclarationKeyword {
+pub enum BuiltInType {
     Int,
     Void,
     Error,
@@ -192,7 +192,7 @@ pub enum Side {
 
 impl Keyword {
     pub fn from_str(s: &str) -> Option<Keyword> {
-        if let Some(decl_key) = DeclarationKeyword::from_str(s) {
+        if let Some(decl_key) = BuiltInType::from_str(s) {
             return Some(Keyword::Declaration(decl_key));
         }
         match s {
@@ -203,22 +203,22 @@ impl Keyword {
     }
 }
 
-impl DeclarationKeyword {
-    pub fn from_str(s: &str) -> Option<DeclarationKeyword> {
+impl BuiltInType {
+    pub fn from_str(s: &str) -> Option<BuiltInType> {
         match s {
-            "int" => Some(DeclarationKeyword::Int),
-            "void" => Some(DeclarationKeyword::Void),
-            "bool" => Some(DeclarationKeyword::Bool),
+            "int" => Some(BuiltInType::Int),
+            "void" => Some(BuiltInType::Void),
+            "bool" => Some(BuiltInType::Bool),
             _ => None,
         }
     }
 }
 
-impl From<Literal> for DeclarationKeyword {
+impl From<Literal> for BuiltInType {
     fn from(value: Literal) -> Self {
         match value {
-            Literal::Integer(..) => DeclarationKeyword::Int,
-            Literal::Bool(..) => DeclarationKeyword::Bool,
+            Literal::Integer(..) => BuiltInType::Int,
+            Literal::Bool(..) => BuiltInType::Bool,
         }
     }
 }
