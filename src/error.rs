@@ -193,7 +193,7 @@ impl SemanticError {
                 Some(format!("{} and {}", left, right))
             }
             SemanticError::InvalidArgumentType { arg_type, .. } => {
-                Some(format!("arg of type {}.", arg_type))
+                Some(format!("arg of type {}", arg_type))
             }
             SemanticError::TooFewArguments {
                 desired, provided, ..
