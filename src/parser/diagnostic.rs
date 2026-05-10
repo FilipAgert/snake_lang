@@ -64,7 +64,7 @@ fn format_highlight(
     let after = &source[end.min(line_end)..line_end];
 
     // 3. Build the string
-    let gutter_width = 4;
+    let gutter_width = 3;
     let mut output = String::new();
 
     // Line 1: Empty gutter
@@ -125,8 +125,10 @@ pub fn print_error(source: &str, error: &Error) {
             HighlightColor::Yellow,
             secondary_label.as_deref(),
         );
+        println!("...");
         println!("{}", second_snippet);
     }
+    println!("");
 }
 
 impl Diagnostic {

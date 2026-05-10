@@ -252,12 +252,19 @@ fn type_check_pass_expr(
                         let num_excess = num_parameters - num_arguments;
                         let missing_params_span =
                             Span::merge(v[num_parameters - 1].1, v[num_parameters - num_excess].1);
+                        let missing_params_types: Vec<ExpressionType> = v
+                            [num_parameters - num_excess..num_parameters]
+                            .iter()
+                            .map(|(first, _)| (*first).clone())
+                            .collect();
+
                         diag.push(
                             callee_span,
                             SemanticError::TooFewArguments {
                                 desired: num_parameters,
                                 provided: num_arguments,
                                 missing_span: missing_params_span,
+                                missing_types: missing_params_types,
                             },
                         );
                     }

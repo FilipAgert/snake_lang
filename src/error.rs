@@ -31,6 +31,7 @@ pub enum SemanticError {
     TooFewArguments {
         desired: usize,
         provided: usize,
+        missing_types: Vec<ExpressionType>,
         missing_span: Span,
     },
     InvalidArgumentType {
@@ -209,13 +210,20 @@ impl SemanticError {
                 Some(format!("Original definition of '{}' is here", id))
             }
             SemanticError::InvalidArgumentType { parameter_type, .. } => {
-                Some(format!("Parameter is defined as type {}", parameter_type))
+                Some(format!("Parameter of type {}", parameter_type))
             }
             SemanticError::IncompatibleReturnType { fun_sig, .. } => Some(format!(
                 "Function signature specifies {} return type",
                 fun_sig
             )),
-            SemanticError::TooFewArguments { .. } => Some("Missing arguments here".to_string()),
+            SemanticError::TooFewArguments { missing_types, .. } => {
+                let arglist = missing_types
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Some(format!("Missing arguments: [{}]", arglist))
+            }
             SemanticError::TooManyArguments { limit, .. } => {
                 Some(format!("The {} legal arguments", limit))
             }
