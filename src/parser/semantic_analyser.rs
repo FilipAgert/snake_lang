@@ -26,6 +26,12 @@ pub enum SemanticError {
     AlreadyDefinedInScope,
     TooManyArguments {
         limit: usize,
+        provided: usize,
+    },
+    TooFewArguments {
+        desired: usize,
+        provided: usize,
+        missing_span: Span,
     },
     InvalidArgumentType {
         arg_type: ExpressionType,
@@ -250,6 +256,40 @@ fn type_check_pass_expr(
                         }
                     };
 
+                //check if too many or too few arguments supplied.
+                if let Some(v) = &parameters {
+                    let num_arguments = arguments.len();
+                    let num_parameters = v.len();
+                    if num_arguments > num_parameters {
+                        // we know we have at least one argument.
+                        let num_excess = num_arguments - num_parameters;
+                        let extra_span = Span::merge(
+                            &arguments[num_arguments - 1].span,
+                            &arguments[num_arguments - num_excess].span,
+                        );
+                        diag.push(
+                            extra_span,
+                            SemanticError::TooManyArguments {
+                                limit: num_parameters,
+                                provided: num_arguments,
+                            },
+                        );
+                    } else if num_arguments < num_parameters {
+                        let callee_span = expr.span.clone();
+                        let num_excess = num_parameters - num_arguments;
+                        let missing_params_span =
+                            Span::merge(v[num_parameters - 1].1, v[num_parameters - num_excess].1);
+                        diag.push(
+                            callee_span,
+                            SemanticError::TooFewArguments {
+                                desired: num_parameters,
+                                provided: num_arguments,
+                                missing_span: missing_params_span,
+                            },
+                        );
+                    }
+                }
+
                 for (i, argument) in arguments.iter().enumerate() {
                     // check argument of function (that they are not constructed of bad expressions)
                     let argtype = type_check_pass_expr(argument, diag, dec_tables);
@@ -270,13 +310,6 @@ fn type_check_pass_expr(
                                     },
                                 );
                             }
-                        } else {
-                            diag.push(
-                                argument.span.clone(),
-                                SemanticError::TooManyArguments {
-                                    limit: parameters.len(),
-                                },
-                            );
                         }
                     }
                 }
