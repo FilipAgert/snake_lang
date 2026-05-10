@@ -43,14 +43,7 @@ pub enum StatementError {
     UnexpectedEOF,
     UnexpectedToken(TokenType),
     ExpectedToken { expected: TokenType, got: TokenType },
-    DeclarationError(DeclarationError),
     AssignmentToNonId,
-}
-
-impl From<DeclarationError> for StatementError {
-    fn from(error: DeclarationError) -> Self {
-        StatementError::DeclarationError(error)
-    }
 }
 
 impl From<ExpressionError> for StatementError {
@@ -68,11 +61,6 @@ impl From<Expression> for Statement {
         }
     }
 }
-#[derive(Debug, Clone)]
-enum DeclarationError {
-    MissingDeclarationKeyword,
-    MissingIdentifier,
-}
 
 fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError> {
     let peeked_token = state.peek();
@@ -81,7 +69,10 @@ fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError
         _ => {
             state.report::<StatementError>(
                 peeked_token.span,
-                DeclarationError::MissingDeclarationKeyword.into(),
+                StatementError::ExpectedToken {
+                    expected: TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Error)),
+                    got: peeked_token.token_type.clone(),
+                },
             );
             (None, None)
         }
@@ -96,7 +87,13 @@ fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError
         }
         _ => {
             let span = peeked_token.span.clone();
-            state.report::<StatementError>(span, DeclarationError::MissingIdentifier.into());
+            state.report::<StatementError>(
+                span,
+                StatementError::ExpectedToken {
+                    expected: TokenType::Identifier(Box::from("")),
+                    got: peeked_token.token_type.clone(),
+                },
+            );
             (state.next_anon_var(), span)
         }
     };
