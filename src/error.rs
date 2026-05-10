@@ -222,6 +222,22 @@ impl SemanticError {
             _ => None,
         }
     }
+    pub fn secondary_span(&self) -> Option<&Span> {
+        match self {
+            SemanticError::AlreadyDefinedInScope(..) => {
+                todo!("Don't have original definition span.")
+            }
+            SemanticError::IncompatibleReturnType { .. } => {
+                todo!("Don't have span of function signature.")
+            }
+            SemanticError::InvalidArgumentType { parameter_span, .. } => Some(parameter_span),
+            SemanticError::TooFewArguments { missing_span, .. } => Some(missing_span),
+            SemanticError::UseBeforeDefinition { .. } => {
+                todo!("Maybe should check where defined later")
+            }
+            _ => None,
+        }
+    }
 }
 impl ExpressionError {
     pub fn detailed_text(&self) -> Option<String> {
@@ -246,6 +262,9 @@ impl ExpressionError {
             _ => None,
         }
     }
+    pub fn secondary_span(&self) -> Option<&Span> {
+        None
+    }
 }
 
 impl StatementError {
@@ -267,6 +286,9 @@ impl StatementError {
             _ => None,
         }
     }
+    pub fn secondary_span(&self) -> Option<&Span> {
+        None
+    }
 }
 
 impl ErrorT {
@@ -283,6 +305,14 @@ impl ErrorT {
             ErrorT::ExpressionError(e) => e.secondary_text(),
             ErrorT::StatementError(e) => e.secondary_text(),
             ErrorT::SemanticError(e) => e.secondary_text(),
+        }
+    }
+
+    pub fn secondary_span(&self) -> Option<&Span> {
+        match self {
+            ErrorT::ExpressionError(e) => e.secondary_span(),
+            ErrorT::StatementError(e) => e.secondary_span(),
+            ErrorT::SemanticError(e) => e.secondary_span(),
         }
     }
 }

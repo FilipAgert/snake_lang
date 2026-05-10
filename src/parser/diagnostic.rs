@@ -104,16 +104,29 @@ pub fn print_error(source: &str, error: &Error) {
     println!("\x1b[1;31mError:\x1b[0m {}", error.error_t);
     println!("  --> line {}:{}", line_s, col_s);
 
-    let snippet = format_highlight(
+    let first_snippet = format_highlight(
         source,
         error.span.start,
         error.span.end,
         line_s,
         HighlightColor::Red,
-        Some("expected a semicolon"), // Or None
+        error.error_t.detailed_text().as_deref(), // Or None
     );
 
-    println!("{}", snippet);
+    println!("{}", first_snippet);
+    if let Some(span) = error.error_t.secondary_span() {
+        let (line_s, _) = get_line_col(source, span.start);
+        let secondary_label = error.error_t.secondary_text();
+        let second_snippet = format_highlight(
+            source,
+            span.start,
+            span.end,
+            line_s,
+            HighlightColor::Yellow,
+            secondary_label.as_deref(),
+        );
+        println!("{}", second_snippet);
+    }
 }
 
 impl Diagnostic {
