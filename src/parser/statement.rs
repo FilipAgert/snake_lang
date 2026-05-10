@@ -547,7 +547,8 @@ fn generate_ast_block(
                 let next_one = state.peek();
                 match next_one.token_type {
                     TokenType::Symbol(Symbol::Semicolon)
-                    | TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => {
+                    | TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right)))
+                    | TokenType::EOF => {
                         state.next();
                     }
                     _ => {
