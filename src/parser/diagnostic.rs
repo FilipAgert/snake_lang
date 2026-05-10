@@ -76,7 +76,7 @@ pub fn print_error(source: &str, error: &Error) {
     // 3. Extract the segments
     let before = &source[line_start..start];
     let highlight = &source[start..end];
-    let after = &source[end..line_end];
+    let after = &source[end.min(line_end)..line_end];
 
     // 3. Print the error header
 

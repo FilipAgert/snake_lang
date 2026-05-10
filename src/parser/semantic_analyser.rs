@@ -609,4 +609,21 @@ mod tests {
             _ => assert!(false),
         }
     }
+
+    #[test]
+    fn test_semicolon_error() {
+        let input = "{int a}";
+        let mut diag = Diagnostic::new();
+        let mut state = ParseState::new(scan(input), &mut diag);
+        let (mut root, mut size) = generate_ast(&mut state).unwrap();
+        assert!(diag.has_errors());
+        let err = &diag.get_errors()[0];
+        diag.print_errors(input);
+        match &err.error_t {
+            ErrorT::StatementError(StatementError::ExpectedToken { .. }) => {
+                assert!(true)
+            }
+            _ => assert!(false),
+        }
+    }
 }

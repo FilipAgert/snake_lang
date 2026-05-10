@@ -119,7 +119,9 @@ fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError
 
     let assignment_token = state.peek();
     let assignment: Option<Expression> = match assignment_token.token_type {
-        TokenType::Symbol(Symbol::Semicolon | Symbol::Comma) => None, //
+        TokenType::Symbol(
+            Symbol::Semicolon | Symbol::Comma | Symbol::Bracket(Bracket::Parenthesis(Side::Right)),
+        ) => None, //
         TokenType::Op(Operator::Equal) => {
             state.next(); // Consume equal
             let assignment_expr = parse_expression(state, 0);
@@ -127,9 +129,11 @@ fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError
             Some(assignment_expr)
         }
         _ => {
-            return Err(StatementError::UnexpectedToken(
-                assignment_token.token_type.clone(),
-            ));
+            state.report(
+                assignment_token.span.clone(),
+                StatementError::UnexpectedToken(assignment_token.token_type.clone()),
+            );
+            None
         }
     };
     let span = Span::merge(

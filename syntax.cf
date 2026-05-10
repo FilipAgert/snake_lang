@@ -1,6 +1,6 @@
-fn f(int x, bool y, z) : bool {
+fn f(int x, bool y, int z) : bool {
     int d = 4;
-    g + x;
+    int g = x;
 
     if y == true{
         d = d + 4;
@@ -11,19 +11,6 @@ fn f(int x, bool y, z) : bool {
 }
 
 {
-    int a = 5;
-    int b = 4
-    x = 4;
-    int c = d - (x + 4;
-    int d = f(c, b, c);
-
-    bool eft = true;
-    bool bla = false;
-    bool res = eft && bla;
-    int hej = eft * (c*a);
-
-    {
-        bool a = true;
-        eft = a && bla;
-    }
+    bool bla = 1;
+    int a = f(true, 2, 1);
 }
