@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::parser::diagnostic::Diagnostic;
 use crate::parser::parse_state::Counter;
@@ -414,7 +415,10 @@ fn populate_link_table<'a>(
                 );
                 dec_tables.type_table.push(ExpressionType::Error);
                 dec_tables.ref_table.push(statement);
-                diag.push(statement.span, SemanticError::UseBeforeDefinition);
+                diag.push(
+                    statement.span,
+                    SemanticError::UseBeforeDefinition(identifier.clone()),
+                );
             }
         }
         StatementT::Declaration {
@@ -433,7 +437,10 @@ fn populate_link_table<'a>(
                 && symbol.depth > SymbolTable::GLOBAL_SCOPE_DEPTH
             // to ensure we do not throw error on global defs
             {
-                diag.push(statement.span, SemanticError::AlreadyDefinedInScope);
+                diag.push(
+                    statement.span,
+                    SemanticError::AlreadyDefinedInScope(symbol.identifier.clone()),
+                );
                 dec_tables.link_table[statement.node_id] = symbol.symbol_id;
             } else {
                 define_symbol(
@@ -478,7 +485,10 @@ fn populate_link_table<'a>(
                 && symbol.depth > SymbolTable::GLOBAL_SCOPE_DEPTH
             {
                 //
-                diag.push(statement.span, SemanticError::AlreadyDefinedInScope);
+                diag.push(
+                    statement.span,
+                    SemanticError::AlreadyDefinedInScope(symbol.identifier.clone()),
+                );
                 dec_tables.link_table[statement.node_id] = symbol.symbol_id;
             } else {
                 define_symbol(
@@ -533,7 +543,10 @@ fn pop_link_tab_exp(
                 if let Some(symbol) = symbol_table.lookup(&id) {
                     dec_tables.link_table[expression.node_id] = symbol.symbol_id;
                 } else {
-                    diag.push(expression.span, SemanticError::UseBeforeDefinition);
+                    diag.push(
+                        expression.span,
+                        SemanticError::UseBeforeDefinition(id.clone()),
+                    );
                     dec_tables.link_table[expression.node_id] = symbol_ctr.next_id();
                     dec_tables.type_table.push(ExpressionType::Error);
                     dec_tables.ref_table.push(&ERROR_STATEMENT);
@@ -547,7 +560,10 @@ fn pop_link_tab_exp(
                 if let Some(symbol) = symbol_table.lookup(&id) {
                     dec_tables.link_table[expression.node_id] = symbol.symbol_id;
                 } else {
-                    diag.push(expression.span, SemanticError::UseBeforeDefinition);
+                    diag.push(
+                        expression.span,
+                        SemanticError::UseBeforeDefinition(id.clone()),
+                    );
                     dec_tables.link_table[expression.node_id] = symbol_ctr.next_id();
                     dec_tables.type_table.push(ExpressionType::Error);
                     dec_tables.ref_table.push(&ERROR_STATEMENT);
@@ -670,7 +686,7 @@ mod tests {
         assert!(diag.has_errors());
         let err = &diag.get_errors()[0];
         match err.error_t {
-            ErrorT::SemanticError(SemanticError::UseBeforeDefinition) => assert!(true),
+            ErrorT::SemanticError(SemanticError::UseBeforeDefinition(..)) => assert!(true),
             _ => assert!(false),
         }
     }
