@@ -190,7 +190,7 @@ impl SemanticError {
                 Some(format!("should be type {} not {}", fun_sig, attempted))
             }
             SemanticError::IncompatibleTypes { left, right } => {
-                Some(format!("{} and {}", left, right))
+                Some(format!("lhs: {}, rhs: {}", left, right))
             }
             SemanticError::InvalidArgumentType { arg_type, .. } => {
                 Some(format!("arg of type {}", arg_type))
