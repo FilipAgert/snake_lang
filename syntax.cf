@@ -1,12 +1,17 @@
 {
     int a = 5;
-    int b = 4;
+    int b = 4
     x = 4;
-    int c = d - x + 4;
+    int c = d - (x + 4;
     int d;
 
     bool eft = true;
     bool bla = false;
     bool res = eft && bla;
     int hej = eft * (c*a);
+
+    {
+        bool a = true;
+        eft = a && bla;
+    }
 }
