@@ -333,6 +333,7 @@ fn populate_link_table(
             parameters,
             return_type,
             body,
+            return_expression,
         } => {
             if let Some(symbol) = symbol_table.lookup(identifier)
                 && symbol.depth == symbol_table.depth()
@@ -357,6 +358,13 @@ fn populate_link_table(
                 for statement in body {
                     populate_link_table(statement, dec_tables, symbol_ctr, symbol_table, diag);
                 }
+                pop_link_tab_exp(
+                    return_expression,
+                    dec_tables,
+                    symbol_ctr,
+                    symbol_table,
+                    diag,
+                );
                 symbol_table.pop();
             }
         }

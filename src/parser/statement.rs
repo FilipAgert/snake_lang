@@ -3,6 +3,7 @@ use crate::parser::expression::*;
 use crate::parser::parse_state::ParseState;
 use std::iter::Peekable;
 use std::slice::Iter;
+use std::str::Matches;
 #[derive(Debug, Clone)]
 
 pub enum StatementT {
@@ -18,6 +19,7 @@ pub enum StatementT {
         identifier: Box<str>,
         parameters: Vec<Statement>,
         return_type: DeclarationKeyword,
+        return_expression: Expression,
         body: Vec<Statement>,
     },
     Assignment {
@@ -147,14 +149,210 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
         return Err(err);
     }
 
-    let identifier = state.next();
-    let id = if let TokenType::Identifier(id) = identifier.token_type {
+    let identifier = state.peek();
+    let id = if let TokenType::Identifier(id) = identifier.token_type.clone() {
+        state.next();
         id
     } else {
-        state.next_anon_fun()
+        state.report(
+            identifier.span,
+            StatementError::ExpectedToken {
+                expected: TokenType::Identifier(Box::from("Function id")),
+                got: identifier.token_type.clone(),
+            },
+        );
+        state.next_anon_fun() // give it an anonymous name.
     };
 
-    todo!();
+    // expect parameter list (int a, int b, bool c = true)
+    let opening_brace = state.peek();
+    let l_par = TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Left)));
+    if !matches!(&opening_brace.token_type, l_par) {
+        state.report(
+            opening_brace.span,
+            StatementError::ExpectedToken {
+                expected: l_par,
+                got: opening_brace.token_type.clone(),
+            },
+        );
+    } else {
+        state.next(); // consume opening brace.
+    }
+    let mut parameters: Vec<Statement> = Vec::new();
+    const SYNC_TOKENS: [TokenType; 4] = [
+        TokenType::Symbol(Symbol::Comma),
+        TokenType::Symbol(Symbol::Colon),
+        TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right))),
+        TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Left))),
+    ];
+
+    loop {
+        let next = state.peek();
+        match next.token_type {
+            TokenType::Symbol(Symbol::Comma) => {
+                state.next();
+            }
+            TokenType::Symbol(Symbol::Bracket(Bracket::Parenthesis(Side::Right))) => {
+                state.next();
+                break;
+            }
+            TokenType::Keyword(Keyword::Declaration(..)) | TokenType::Identifier(..) => {
+                if let Ok(decl) = parse_declaration(state) {
+                    parameters.push(decl);
+                } else {
+                    state.synchronize_to(&SYNC_TOKENS);
+                }
+                //id here is an error, but may still parse it as a declaration without a real type.
+            }
+            TokenType::Symbol(Symbol::Colon)
+            | TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => {
+                state.report(
+                    next.span,
+                    StatementError::UnexpectedToken(next.token_type.clone()),
+                );
+                break;
+            }
+            _ => {
+                state.report(
+                    next.span,
+                    StatementError::UnexpectedToken(next.token_type.clone()),
+                );
+                //try to recover: next comma, next ), next : or next {
+                state.synchronize_to(&SYNC_TOKENS);
+            }
+        }
+    }
+
+    // now expect a : ReturnType keyword:
+    let colon = state.peek();
+    if !matches!(colon.token_type, TokenType::Symbol(Symbol::Colon)) {
+        state.report(
+            colon.span,
+            StatementError::ExpectedToken {
+                expected: TokenType::Symbol(Symbol::Colon),
+                got: colon.token_type.clone(),
+            },
+        );
+    } else {
+        state.next();
+    }
+    // expect a ReturnType keyword
+    let ret_type = state.peek();
+    let ret_type = if let TokenType::Keyword(Keyword::Declaration(decl)) = ret_type.token_type {
+        state.next();
+        decl
+    } else {
+        state.report(
+            ret_type.span,
+            StatementError::ExpectedToken {
+                expected: TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Void)),
+                got: ret_type.token_type.clone(),
+            },
+        );
+        DeclarationKeyword::Error
+    };
+
+    // now we expect a block statement.
+    let opening_brace = state.peek();
+    if !matches!(
+        opening_brace.token_type,
+        TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Left)))
+    ) {
+        state.report(
+            opening_brace.span,
+            StatementError::ExpectedToken {
+                expected: TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Left))),
+                got: opening_brace.token_type.clone(),
+            },
+        );
+        state.synchronize_to(&[TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(
+            Side::Left,
+        )))]);
+    }
+
+    let brace = state.next(); // consume opening brace.
+    let block = generate_ast_block(state);
+    let (statements, span, return_expr) = if let Ok((mut statements, mut span)) = block {
+        // next two things should be return statement, then closing brace.
+        let ret = state.peek();
+        let return_expr = if !matches!(ret.token_type, TokenType::Keyword(Keyword::Return)) {
+            state.report(
+                ret.span.clone(),
+                StatementError::ExpectedToken {
+                    expected: TokenType::Keyword(Keyword::Return),
+                    got: ret.token_type.clone(),
+                },
+            );
+            Expression {
+                etype: ExpressionT::Error,
+                span: Span::min_info(),
+                node_id: state.next_id(),
+            }
+        } else {
+            state.next();
+            parse_expression(state, 0)
+        };
+
+        let closing_brace = state.peek();
+
+        let span = if !matches!(
+            closing_brace.token_type,
+            TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right)))
+        ) {
+            let span = closing_brace.span.clone();
+            state.report(
+                span.clone(),
+                StatementError::ExpectedToken {
+                    expected: TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))),
+                    got: closing_brace.token_type.clone(),
+                },
+            );
+            span
+        } else {
+            let b = state.next();
+            b.span
+        };
+        (
+            statements,
+            Some(Span::merge(&brace.span, &span)),
+            return_expr,
+        )
+    } else {
+        state.report(
+            Span::merge(&brace.span, &state.peek().span),
+            block.expect_err("In error branch"),
+        );
+        state.synchronize_to(&[
+            TokenType::Symbol(Symbol::Semicolon),
+            TokenType::Keyword(Keyword::FunctionDeclaration),
+            TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Bool)),
+            TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Int)),
+            TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Void)),
+        ]);
+        (
+            Vec::new(),
+            None,
+            Expression {
+                etype: ExpressionT::Error,
+                span: Span::min_info(),
+                node_id: state.next_id(),
+            },
+        )
+    };
+
+    // fun_span
+    let fun_span = Span::merge(&function_keyword.span, &span.unwrap_or(brace.span));
+    Ok(Statement {
+        span: fun_span,
+        node_id: state.next_id(),
+        stype: StatementT::FunctionDeclaration {
+            identifier: id,
+            parameters: parameters,
+            return_type: ret_type,
+            return_expression: return_expr,
+            body: statements,
+        },
+    })
 }
 pub fn generate_ast(state: &mut ParseState) -> Result<(Statement, usize), StatementError> {
     let root_id = state.next_id();
@@ -267,14 +465,19 @@ fn generate_ast_block(
                     node_id: state.next_id(),
                 });
             }
-            TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => break,
+            TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right)))
+            | TokenType::Keyword(Keyword::Return) => break,
             // do not consume closing brace so that block calling can check for its existance
             TokenType::EOF => {
                 state.next(); // consume the token.
                 break;
             }
             _ => {
-                return Err(StatementError::UnexpectedToken(token.token_type.clone()));
+                state.report(
+                    token.span,
+                    StatementError::UnexpectedToken(token.token_type.clone()),
+                );
+                state.synchronize_to(&[TokenType::Symbol(Symbol::Semicolon)]);
             }
         }
     }
