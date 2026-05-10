@@ -68,19 +68,28 @@ impl From<Expression> for Statement {
 
 fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError> {
     let peeked_token = state.peek();
-    let (declaration_token, declaration_value) = match peeked_token.token_type {
-        TokenType::Keyword(Keyword::Declaration(decl)) => (Some(state.next()), Some(decl)),
-        _ => {
-            state.report::<StatementError>(
-                peeked_token.span,
-                StatementError::ExpectedToken {
-                    expected: TokenType::Keyword(Keyword::Declaration(BuiltInType::Error)),
-                    got: peeked_token.token_type.clone(),
-                },
-            );
-            (None, None)
-        }
-    };
+    let (declaration_token, declaration_value): (Option<Token>, Option<ExpressionType>) =
+        match &peeked_token.token_type {
+            TokenType::Keyword(Keyword::Declaration(decl)) => {
+                let decl = decl.clone();
+                (Some(state.next()), Some(decl.into()))
+            }
+            TokenType::Identifier(id) => {
+                let id = id.clone();
+
+                (Some(state.next()), Some(ExpressionType::Custom(id)))
+            }
+            _ => {
+                state.report::<StatementError>(
+                    peeked_token.span,
+                    StatementError::ExpectedToken {
+                        expected: TokenType::Keyword(Keyword::Declaration(BuiltInType::Error)),
+                        got: peeked_token.token_type.clone(),
+                    },
+                );
+                (None, None)
+            }
+        };
     let declaration_span = declaration_token.map(|d| d.span);
 
     let peeked_token = state.peek();
@@ -126,7 +135,7 @@ fn parse_declaration(state: &mut ParseState) -> Result<Statement, StatementError
         node_id: state.next_id(),
         stype: StatementT::Declaration {
             identifier: id,
-            keyword: declaration_value.unwrap_or(BuiltInType::Error).into(),
+            keyword: declaration_value.unwrap_or(ExpressionType::Error),
             assignment: assignment,
         },
         span: span,
@@ -360,19 +369,40 @@ fn generate_ast_block(
                 } else {
                     state.synchronize_to(&[TokenType::Symbol(Symbol::Semicolon)]);
                 }
-                //expect and consume semicolon.
-                let next_token = state.peek();
-                if !matches!(next_token.token_type, TokenType::Symbol(Symbol::Semicolon),) {
-                    state.report(
-                        next_token.span.clone(),
-                        StatementError::ExpectedToken {
-                            expected: TokenType::Symbol(Symbol::Semicolon),
-                            got: next_token.token_type.clone(),
-                        },
-                    );
-                    // if not a semicolon, report it, but continue as usual.
+            }
+            TokenType::Identifier(_) => {
+                // if next token ALSO is an identifier, this is likely a declaration of varible with a custom type.
+                if let TokenType::Identifier(..) = state.peek_at(1).token_type {
+                    let decl = parse_declaration(state);
+                    if let Ok(decl) = decl {
+                        block_statements.push(decl);
+                    } else {
+                        state.synchronize_to(&[TokenType::Symbol(Symbol::Semicolon)]);
+                    }
                 } else {
-                    state.next(); // consume semicolon if its there. 
+                    // This must be an expression. If it is a binop expression with operator =, turn it into an assignment.
+                    if let TokenType::Op(op) = &state.peek_at(1).token_type
+                        && *op == Operator::Equal
+                    {
+                        let token_span = token.span;
+                        let id = match state.next().token_type {
+                            // consume id
+                            TokenType::Identifier(id) => id,
+                            _ => unreachable!("Already checked for id!"),
+                        };
+                        state.next(); // consume equal sign
+                        let assignment = parse_expression(state, 0);
+                        block_statements.push(Statement {
+                            span: Span::merge(&token_span, &assignment.span),
+                            stype: StatementT::Assignment {
+                                identifier: id,
+                                value: assignment,
+                            },
+                            node_id: state.next_id(),
+                        });
+                    } else {
+                        block_statements.push(parse_expression(state, 0).into());
+                    }
                 }
             }
             TokenType::Keyword(Keyword::FunctionDeclaration) => {
@@ -387,31 +417,6 @@ fn generate_ast_block(
                     span: Span::merge(&ret.span, &ret_expr.span),
                     node_id: state.next_id(),
                 });
-            }
-            TokenType::Identifier(_) => {
-                // This must be an expression. If it is a binop expression with operator =, turn it into an assignment.
-                if let TokenType::Op(op) = &state.peek_at(1).token_type
-                    && *op == Operator::Equal
-                {
-                    let token_span = token.span;
-                    let id = match state.next().token_type {
-                        // consume id
-                        TokenType::Identifier(id) => id,
-                        _ => unreachable!("Already checked for id!"),
-                    };
-                    state.next(); // consume equal sign
-                    let assignment = parse_expression(state, 0);
-                    block_statements.push(Statement {
-                        span: Span::merge(&token_span, &assignment.span),
-                        stype: StatementT::Assignment {
-                            identifier: id,
-                            value: assignment,
-                        },
-                        node_id: state.next_id(),
-                    });
-                } else {
-                    block_statements.push(parse_expression(state, 0).into());
-                }
             }
             TokenType::Op(Operator::Minus) | TokenType::Literal(_) => {
                 block_statements.push(parse_expression(state, 0).into());
@@ -443,8 +448,7 @@ fn generate_ast_block(
                     node_id: state.next_id(),
                 });
             }
-            TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right)))
-            | TokenType::Keyword(Keyword::Return) => break,
+            TokenType::Symbol(Symbol::Bracket(Bracket::CurlyBrace(Side::Right))) => break,
             // do not consume closing brace so that block calling can check for its existance
             TokenType::EOF => {
                 state.next(); // consume the token.

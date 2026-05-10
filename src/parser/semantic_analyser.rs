@@ -29,8 +29,8 @@ pub enum SemanticError {
 pub enum ExpressionType {
     Standard(BuiltInType),
     Pointer(Box<ExpressionType>),
-    Custom(usize), // custom datatype
-    Error,         // Compiler could not determine type.
+    Custom(Box<str>), // custom datatype
+    Error,            // Compiler could not determine type.
 }
 
 impl From<BuiltInType> for ExpressionType {
