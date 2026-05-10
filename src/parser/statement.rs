@@ -20,7 +20,6 @@ pub enum StatementT {
         identifier: Box<str>,
         parameters: Vec<Statement>,
         return_type: DeclarationKeyword,
-        return_expression: Expression,
         body: Vec<Statement>,
     },
     Assignment {
@@ -30,6 +29,7 @@ pub enum StatementT {
     Block {
         statements: Vec<Statement>,
     },
+    ReturnStatement(ExpressionT),
     ExpressionStatement(ExpressionT),
 }
 
@@ -273,39 +273,7 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
 
     let brace = state.next(); // consume opening brace.
     let block = generate_ast_block(state);
-    let (statements, span, return_expr) = if let Ok((mut statements, mut span)) = block {
-        // next two things should be return statement, then closing brace.
-        let ret = state.peek();
-        let return_expr = if !matches!(ret.token_type, TokenType::Keyword(Keyword::Return)) {
-            state.report(
-                ret.span.clone(),
-                StatementError::ExpectedToken {
-                    expected: TokenType::Keyword(Keyword::Return),
-                    got: ret.token_type.clone(),
-                },
-            );
-            Expression {
-                etype: ExpressionT::Error,
-                span: Span::min_info(),
-                node_id: state.next_id(),
-            }
-        } else {
-            state.next();
-            parse_expression(state, 0)
-        };
-
-        let semicolon = state.peek();
-        if !matches!(semicolon.token_type, TokenType::Symbol(Symbol::Semicolon)) {
-            state.report(
-                semicolon.span.clone(),
-                StatementError::ExpectedToken {
-                    expected: TokenType::Symbol(Symbol::Semicolon),
-                    got: semicolon.token_type.clone(),
-                },
-            );
-        } else {
-            state.next();
-        }
+    let (statements, span) = if let Ok((mut statements, mut span)) = block {
         let closing_brace = state.peek();
 
         let span = if !matches!(
@@ -325,11 +293,7 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
             let b = state.next();
             b.span
         };
-        (
-            statements,
-            Some(Span::merge(&brace.span, &span)),
-            return_expr,
-        )
+        (statements, Some(Span::merge(&brace.span, &span)))
     } else {
         state.report(
             Span::merge(&brace.span, &state.peek().span),
@@ -342,15 +306,7 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
             TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Int)),
             TokenType::Keyword(Keyword::Declaration(DeclarationKeyword::Void)),
         ]);
-        (
-            Vec::new(),
-            None,
-            Expression {
-                etype: ExpressionT::Error,
-                span: Span::min_info(),
-                node_id: state.next_id(),
-            },
-        )
+        (Vec::new(), None)
     };
 
     // fun_span
@@ -362,7 +318,6 @@ fn parse_fn_declaration(state: &mut ParseState) -> Result<Statement, StatementEr
             identifier: id,
             parameters: parameters,
             return_type: ret_type,
-            return_expression: return_expr,
             body: statements,
         },
     })
@@ -422,6 +377,15 @@ fn generate_ast_block(
             TokenType::Keyword(Keyword::FunctionDeclaration) => {
                 //  do not consume function declaration keyword
                 block_statements.push(parse_fn_declaration(state)?);
+            }
+            TokenType::Keyword(Keyword::Return) => {
+                let ret = state.next();
+                let ret_expr = parse_expression(state, 0);
+                block_statements.push(Statement {
+                    stype: StatementT::ReturnStatement(ret_expr.etype),
+                    span: Span::merge(&ret.span, &ret_expr.span),
+                    node_id: state.next_id(),
+                });
             }
             TokenType::Identifier(_) => {
                 // This must be an expression. If it is a binop expression with operator =, turn it into an assignment.
