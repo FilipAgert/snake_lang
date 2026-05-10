@@ -1,4 +1,5 @@
 use super::super::lexer::token::*;
+use crate::error::ErrorT;
 use crate::parser::diagnostic::*;
 use std::collections::VecDeque;
 

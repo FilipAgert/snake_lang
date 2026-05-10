@@ -1,11 +1,8 @@
+use crate::error::StatementError;
 use crate::lexer::token::*;
 use crate::parser::expression::*;
 use crate::parser::parse_state::ParseState;
 use crate::parser::semantic_analyser::ExpressionType;
-use crate::parser::semantic_analyser::SemanticError;
-use std::iter::Peekable;
-use std::slice::Iter;
-use std::str::Matches;
 #[derive(Debug, Clone)]
 
 pub enum StatementT {
@@ -51,22 +48,6 @@ pub struct Statement {
     pub stype: StatementT,
     pub span: Span,
     pub node_id: usize,
-}
-
-#[derive(Debug, Clone)]
-pub enum StatementError {
-    ExpressionError(ExpressionError),
-    UnexpectedEOF,
-    UnexpectedToken(TokenType),
-    ExpectedToken { expected: TokenType, got: TokenType },
-    AssignmentToNonId,
-    ExpectedBlockHere,
-}
-
-impl From<ExpressionError> for StatementError {
-    fn from(error: ExpressionError) -> Self {
-        StatementError::ExpressionError(error)
-    }
 }
 
 impl From<Expression> for Statement {

@@ -1,44 +1,16 @@
-use core::num;
-use std::any::Any;
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use crate::parser::diagnostic::Diagnostic;
-use crate::parser::expression::{self, ExpressionError};
 use crate::parser::parse_state::Counter;
 use crate::{
-    lexer::token::{BuiltInType, Literal, Span},
+    error::{ErrorT, SemanticError, StatementError},
+    lexer::token::{BuiltInType, Span},
     parser::{
         expression::{Expression, ExpressionT, ValueExpression},
-        statement::{self, *},
+        statement::*,
     },
 };
-#[derive(Debug)]
-pub enum SemanticError {
-    IncompatibleTypes {
-        left: ExpressionType,
-        right: ExpressionType,
-    },
-    IncompatibleReturnType {
-        fun_sig: ExpressionType,
-        attempted: ExpressionType,
-    },
-    UseBeforeDefinition,
-    AlreadyDefinedInScope,
-    TooManyArguments {
-        limit: usize,
-        provided: usize,
-    },
-    TooFewArguments {
-        desired: usize,
-        provided: usize,
-        missing_span: Span,
-    },
-    InvalidArgumentType {
-        arg_type: ExpressionType,
-        parameter_type: ExpressionType,
-        parameter_span: Span,
-    },
-}
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum ExpressionType {
     Standard(BuiltInType),

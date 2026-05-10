@@ -1,9 +1,6 @@
-use super::parse_state::*;
-use crate::lexer::token::Span;
+use crate::error::ExpressionError;
 use crate::lexer::token::*;
-use std::fmt::Binary;
-use std::iter::Peekable;
-use std::slice::Iter;
+use crate::parser::parse_state::*;
 
 // We should do binary operations first...
 // Asignment,
@@ -41,15 +38,6 @@ pub enum ExpressionT {
     Error,
 }
 
-#[derive(Debug, Clone)]
-pub enum ExpressionError {
-    MissingOperand,
-    BinaryOperandOnLhsError(Operator),
-    UnexpectedKeyword(Keyword),
-    UnexpectedSymbol(Symbol),
-    UnexpectedEOF,
-    MissingClosingBrace(TokenType),
-}
 fn parse_argument_list(state: &mut ParseState) -> Vec<Expression> {
     // first token is left brace, stops on the corresponding right brace.
     let mut exprs = Vec::<Expression>::new();
