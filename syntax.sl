@@ -14,7 +14,7 @@ fn f(int x, bool y, int z) : bool {
 
 {
     bool bla = 1;
-    int a = f(bla, 2);
+    int 🐍 = f(bla, 2);
 
-    a = f(2, true, 3, true, true)
+    🐍 = f(2, true, 3, true, true)
 }
