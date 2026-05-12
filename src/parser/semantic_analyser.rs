@@ -145,7 +145,14 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
             then,
             el,
         } => {
-            type_check_pass_expr(conditional, diag, dec_tables);
+            let conditional_eval = type_check_pass_expr(conditional, diag, dec_tables);
+            if conditional_eval != ExpressionType::Standard(BuiltInType::Bool) {
+                diag.push(
+                    conditional.span.clone(),
+                    SemanticError::NonBoolExpressionInConditional,
+                );
+            }
+
             type_check_pass(then, diag, dec_tables);
             if let Some(el_block) = el {
                 type_check_pass(el_block, diag, dec_tables);

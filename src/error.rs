@@ -41,6 +41,7 @@ pub enum SemanticError {
         parameter_type: ExpressionType,
         parameter_span: Span,
     },
+    NonBoolExpressionInConditional,
 }
 #[derive(Debug, Clone)]
 pub enum StatementError {
@@ -132,6 +133,12 @@ impl std::fmt::Display for StatementError {
 impl std::fmt::Display for SemanticError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            SemanticError::NonBoolExpressionInConditional => {
+                write!(
+                    f,
+                    "Conditional statement requires expression to evaluate to a boolean."
+                )
+            }
             SemanticError::AlreadyDefinedInScope(id) => {
                 write!(
                     f,
@@ -211,6 +218,9 @@ impl SemanticError {
                 limit, provided, ..
             } => Some(format!("{} excess argument(s)", provided - limit)),
             SemanticError::UseBeforeDefinition(id) => Some(format!("{} used here", id)),
+            SemanticError::NonBoolExpressionInConditional => {
+                Some(format!("Change expression to evaluate to boolean"))
+            }
         }
     }
     pub fn secondary_text(&self) -> Option<String> {
