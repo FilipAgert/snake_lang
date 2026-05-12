@@ -1,6 +1,5 @@
-use crate::error::*;
-use crate::lexer::token::Span;
-
+use crate::diagnostics::error::*;
+use crate::diagnostics::span::*;
 #[derive(Debug)]
 pub struct Diagnostic {
     errors: Vec<Error>,

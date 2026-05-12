@@ -1,6 +1,5 @@
 use super::super::lexer::token::*;
-use crate::error::ErrorT;
-use crate::parser::diagnostic::*;
+use crate::diagnostics::{diagnostic::Diagnostic, error::ErrorT, span::Span};
 use std::collections::VecDeque;
 
 pub struct ParseState<'a> {

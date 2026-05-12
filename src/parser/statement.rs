@@ -1,4 +1,4 @@
-use crate::error::StatementError;
+use crate::diagnostics::{error::StatementError, span::Span};
 use crate::lexer::token::*;
 use crate::parser::expression::*;
 use crate::parser::parse_state::ParseState;
@@ -615,9 +615,9 @@ mod tests {
     use std::os::linux::raw::stat;
 
     use super::*;
+    use crate::diagnostics::diagnostic::Diagnostic;
     use crate::lexer::lexer::scan;
     use crate::lexer::token::*;
-    use crate::parser::diagnostic::Diagnostic;
     use crate::parser::expression::*;
 
     #[test]

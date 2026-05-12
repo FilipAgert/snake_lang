@@ -1,4 +1,5 @@
-use crate::lexer::token::{Bracket, Keyword, Operator, Span, Symbol, TokenType};
+use crate::diagnostics::span::Span;
+use crate::lexer::token::{Bracket, Keyword, Operator, Symbol, TokenType};
 use crate::parser::statement::ExpressionType;
 use std::fmt;
 #[derive(Debug)]

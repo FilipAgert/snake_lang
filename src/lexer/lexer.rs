@@ -1,4 +1,5 @@
-use crate::lexer::token::{Span, Token, TokenType};
+use crate::diagnostics::span::Span;
+use crate::lexer::token::{Token, TokenType};
 use std::mem;
 use std::string::String;
 

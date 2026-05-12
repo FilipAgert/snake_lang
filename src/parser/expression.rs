@@ -1,4 +1,4 @@
-use crate::error::ExpressionError;
+use crate::diagnostics::{error::ExpressionError, span::Span};
 use crate::lexer::token::*;
 use crate::parser::parse_state::*;
 
@@ -207,9 +207,9 @@ mod tests {
     use std::fmt::Binary;
 
     use super::*;
+    use crate::diagnostics::diagnostic::Diagnostic;
     use crate::lexer::lexer::scan;
     use crate::lexer::token::*;
-    use crate::parser::diagnostic::Diagnostic;
     use crate::parser::expression::*;
 
     #[test]
