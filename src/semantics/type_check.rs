@@ -258,12 +258,8 @@ fn type_check_pass_expr(
 }
 #[cfg(test)]
 mod tests {
-    use std::any::Any;
-    use std::fmt::Binary;
-    use std::os::linux::raw::stat;
-
     use super::*;
-    use crate::diagnostics::{diagnostic::*, error::*};
+    use crate::diagnostics::diagnostic::*;
     use crate::lexer::lexer::scan;
     use crate::parser::parse_state::ParseState;
     use crate::parser::statement::generate_ast;
@@ -296,7 +292,7 @@ mod tests {
     ";
         let mut diag = Diagnostic::new();
         let mut state = ParseState::new(scan(input), &mut diag);
-        let (mut root, mut size) = generate_ast(&mut state).unwrap();
+        let (root, size) = generate_ast(&mut state).unwrap();
         let result = get_dec_tables(&root, &mut diag, size);
         diag.print_errors(input);
         assert!(!diag.has_errors());

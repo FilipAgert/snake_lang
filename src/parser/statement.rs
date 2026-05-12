@@ -611,14 +611,9 @@ fn generate_ast_block(
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Binary;
-    use std::os::linux::raw::stat;
-
     use super::*;
     use crate::diagnostics::diagnostic::Diagnostic;
     use crate::lexer::lexer::scan;
-    use crate::lexer::token::*;
-    use crate::parser::expression::*;
 
     #[test]
     fn test_build_expression_1() {
@@ -662,7 +657,7 @@ mod tests {
      }";
         let mut diag = Diagnostic::new();
         let mut state = ParseState::new(scan(input), &mut diag);
-        let (ast, _) = generate_ast(&mut state).unwrap();
+        let _ = generate_ast(&mut state).unwrap();
         diag.print_errors(input);
         assert_eq!(diag.get_errors().len(), 2);
     }

@@ -204,13 +204,9 @@ pub fn parse_expression(state: &mut ParseState, min_precedence: i32) -> Expressi
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Binary;
-
     use super::*;
     use crate::diagnostics::diagnostic::Diagnostic;
     use crate::lexer::lexer::scan;
-    use crate::lexer::token::*;
-    use crate::parser::expression::*;
 
     #[test]
     fn test_build_expression_1() {
@@ -376,9 +372,9 @@ mod tests {
         let mut state = ParseState::new(scan(input), &mut diag);
         let expression = parse_expression(&mut state, 0);
 
-        if let ExpressionT::BinOp { left, op, right } = expression.etype {
+        if let ExpressionT::BinOp { left, op, .. } = expression.etype {
             assert_eq!(op, Operator::Minus);
-            if let ExpressionT::BinOp { left, op, right } = left.etype {
+            if let ExpressionT::BinOp { op, .. } = left.etype {
                 assert_eq!(op, Operator::Divide);
             } else {
                 panic!("Division should be on the left branch");
