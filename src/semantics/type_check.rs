@@ -5,10 +5,10 @@ use crate::{
         expression::{Expression, ExpressionT, ValueExpression},
         statement::{ExpressionType, Statement, StatementT},
     },
-    semantics::link_stage::DecTables,
+    semantics::link_stage::DeclarationTables,
 };
 
-pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &DecTables) {
+pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &DeclarationTables) {
     match &node.stype {
         StatementT::ErrorStatement => {}
         StatementT::Root { statements } | StatementT::Block { statements } => {
@@ -31,7 +31,7 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
                 && *rhs_type != ExpressionType::Error
             {
                 // check for error so we do not spawn unecessarily many errors.
-                diag.push(
+                diag.report(
                     node.span,
                     SemanticError::IncompatibleTypes {
                         left: lhs_type.clone(),
@@ -64,7 +64,7 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
         } => {
             let conditional_eval = type_check_pass_expr(conditional, diag, dec_tables);
             if conditional_eval != ExpressionType::Standard(BuiltInType::Bool) {
-                diag.push(
+                diag.report(
                     conditional.span.clone(),
                     SemanticError::NonBoolExpressionInConditional,
                 );
@@ -104,7 +104,7 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
                             && ret_type != ExpressionType::Error
                             && *fn_rettype != ExpressionType::Error
                         {
-                            diag.push(
+                            diag.report(
                                 statement.span,
                                 SemanticError::IncompatibleReturnType {
                                     fun_ret_type: fn_rettype.clone(),
@@ -124,7 +124,7 @@ pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &Dec
 fn type_check_pass_expr(
     expr: &Expression,
     diag: &mut Diagnostic,
-    dec_tables: &DecTables,
+    dec_tables: &DeclarationTables,
 ) -> ExpressionType {
     match &expr.etype {
         ExpressionT::Error => ExpressionType::Standard(BuiltInType::Error),
@@ -170,7 +170,7 @@ fn type_check_pass_expr(
                             &arguments[num_arguments - num_excess].span,
                         );
 
-                        diag.push(
+                        diag.report(
                             extra_span,
                             SemanticError::TooManyArguments {
                                 limit: num_parameters,
@@ -189,7 +189,7 @@ fn type_check_pass_expr(
                             .map(|(first, _)| (*first).clone())
                             .collect();
 
-                        diag.push(
+                        diag.report(
                             callee_span,
                             SemanticError::TooFewArguments {
                                 desired: num_parameters,
@@ -212,7 +212,7 @@ fn type_check_pass_expr(
                                 && argtype != ExpressionType::Error
                                 && **param_type != ExpressionType::Error
                             {
-                                diag.push(
+                                diag.report(
                                     argument.span.clone(),
                                     SemanticError::InvalidArgumentType {
                                         arg_type: argtype,
@@ -240,7 +240,7 @@ fn type_check_pass_expr(
 
             if left_type != right_type {
                 if left_type != ExpressionType::Error && right_type != ExpressionType::Error {
-                    diag.push(
+                    diag.report(
                         expr.span,
                         SemanticError::IncompatibleTypes {
                             left: left_type,
@@ -261,7 +261,7 @@ mod tests {
     use super::*;
     use crate::diagnostics::diagnostic::*;
     use crate::lexer::lexer::scan;
-    use crate::parser::parse_state::ParseState;
+    use crate::parser::parse_state::ParsingState;
     use crate::parser::statement::generate_ast;
     use crate::semantics::link_stage::get_dec_tables;
     #[test]
@@ -271,9 +271,9 @@ mod tests {
             int d;
             }";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
-        let tables: DecTables = get_dec_tables(&root, &mut diag, size);
+        let tables: DeclarationTables = get_dec_tables(&root, &mut diag, size);
         println!("num errors: {}", diag.get_errors().len());
         diag.print_errors(input);
         type_check_pass(&root, &mut diag, &tables);
@@ -291,7 +291,7 @@ mod tests {
 
     ";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
         let result = get_dec_tables(&root, &mut diag, size);
         diag.print_errors(input);
@@ -316,7 +316,7 @@ mod tests {
                                 int x = foo(4);
                             }";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let (mut root, mut size) = generate_ast(&mut state).unwrap();
         let result = get_dec_tables(&root, &mut diag, size);
         diag.print_errors(input);

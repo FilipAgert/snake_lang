@@ -4,14 +4,14 @@ mod parser;
 mod semantics;
 use crate::diagnostics::diagnostic::Diagnostic;
 use crate::lexer::lexer::scan;
-use crate::parser::parse_state::ParseState;
+use crate::parser::parse_state::ParsingState;
 use crate::parser::statement::generate_ast;
 use crate::semantics::semantic_analyser::semantic_analysis;
 use std::fs;
 use std::{env, process};
 fn run_compiler(input: &str) -> i32 {
     let mut diag = Diagnostic::new();
-    let mut state = ParseState::new(scan(input), &mut diag);
+    let mut state = ParsingState::new(scan(input), &mut diag);
     let (root, size) = generate_ast(&mut state).unwrap();
     semantic_analysis(&root, size, &mut diag);
 

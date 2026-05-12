@@ -2,7 +2,7 @@ use super::super::lexer::token::*;
 use crate::diagnostics::{diagnostic::Diagnostic, error::ErrorT, span::Span};
 use std::collections::VecDeque;
 
-pub struct ParseState<'a> {
+pub struct ParsingState<'a> {
     tokens: VecDeque<Token>,
     counter: Counter,
     diag: &'a mut Diagnostic,
@@ -13,7 +13,7 @@ static EOF_TOKEN: Token = Token {
     token_type: TokenType::EOF,
     span: Span::min_info(),
 };
-impl<'a> ParseState<'a> {
+impl<'a> ParsingState<'a> {
     pub fn peek(&self) -> &Token {
         self.tokens.front().unwrap_or(&EOF_TOKEN)
     }
@@ -56,7 +56,7 @@ impl<'a> ParseState<'a> {
     where
         T: Into<ErrorT>,
     {
-        self.diag.push(span, error_t);
+        self.diag.report(span, error_t);
     }
 
     // If we have an error, this iterates the tokens until we hit (but do not consume) a recovery token.

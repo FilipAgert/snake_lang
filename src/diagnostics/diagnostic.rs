@@ -133,7 +133,7 @@ impl Diagnostic {
         Self { errors: Vec::new() }
     }
 
-    pub fn push<T>(&mut self, span: Span, error_t: T)
+    pub fn report<T>(&mut self, span: Span, error_t: T)
     where
         T: Into<ErrorT>,
     {

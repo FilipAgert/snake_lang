@@ -38,7 +38,7 @@ pub enum ExpressionT {
     Error,
 }
 
-fn parse_argument_list(state: &mut ParseState) -> Vec<Expression> {
+fn parse_argument_list(state: &mut ParsingState) -> Vec<Expression> {
     // first token is left brace, stops on the corresponding right brace.
     let mut exprs = Vec::<Expression>::new();
     // scan until we hit the same level of opening brace.
@@ -65,7 +65,7 @@ fn parse_argument_list(state: &mut ParseState) -> Vec<Expression> {
     exprs
 }
 
-fn parse_primary(state: &mut ParseState) -> Expression {
+fn parse_primary(state: &mut ParsingState) -> Expression {
     let next_token = state.next();
     match &next_token.token_type {
         TokenType::Identifier(id) => {
@@ -172,7 +172,7 @@ fn parse_primary(state: &mut ParseState) -> Expression {
     }
 }
 
-pub fn parse_expression(state: &mut ParseState, min_precedence: i32) -> Expression {
+pub fn parse_expression(state: &mut ParsingState, min_precedence: i32) -> Expression {
     let mut left = parse_primary(state);
 
     loop {
@@ -212,7 +212,7 @@ mod tests {
     fn test_build_expression_1() {
         let input = "15*x+3";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let expression = parse_expression(&mut state, 0);
 
         assert!(matches!(expression.etype, ExpressionT::BinOp { .. }));
@@ -251,7 +251,7 @@ mod tests {
         // (5 + 3) should be evaluated first, making it a child of '*'
         let input = "10*(5+3)";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let expression = parse_expression(&mut state, 0);
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
@@ -285,7 +285,7 @@ mod tests {
         // 1 + 2 * 3 + 4 should result in ((1 + (2 * 3)) + 4)
         let input = "1+2*3+4";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let expression = parse_expression(&mut state, 0);
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
@@ -319,7 +319,7 @@ mod tests {
         // Note: parse_argument_list must be implemented for this to pass
         let input = "my_func(a, b) * 2";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let expression = parse_expression(&mut state, 0);
 
         if let ExpressionT::BinOp { left, op, right } = expression.etype {
@@ -355,7 +355,7 @@ mod tests {
     fn test_deeply_nested_parentheses() {
         let input = "(((10)))";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let expression = parse_expression(&mut state, 0);
 
         assert_eq!(
@@ -369,7 +369,7 @@ mod tests {
         // 10 / 2 - 1 should be ((10 / 2) - 1)
         let input = "10/2-1";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let expression = parse_expression(&mut state, 0);
 
         if let ExpressionT::BinOp { left, op, .. } = expression.etype {

@@ -65,7 +65,7 @@ impl SymbolTable {
 }
 
 #[derive(Debug)]
-pub struct DecTables<'a> {
+pub struct DeclarationTables<'a> {
     pub link_table: Vec<usize>,
     pub type_table: Vec<ExpressionType>,
     pub ref_table: Vec<&'a Statement>,
@@ -75,10 +75,10 @@ pub fn get_dec_tables<'a>(
     root: &'a Statement,
     diag: &mut Diagnostic,
     num_ids: usize,
-) -> DecTables<'a> {
+) -> DeclarationTables<'a> {
     let mut symbol_ctr = Counter::new();
     let mut symbol_table = SymbolTable::new();
-    let mut dec_tables = DecTables {
+    let mut dec_tables = DeclarationTables {
         link_table: vec![usize::MAX; num_ids],
         type_table: Vec::new(),
         ref_table: Vec::new(),
@@ -110,7 +110,7 @@ fn define_symbol(
 // Defines all links and types of all declarations.
 fn populate_link_table<'a>(
     statement: &'a Statement,
-    dec_tables: &mut DecTables<'a>,
+    dec_tables: &mut DeclarationTables<'a>,
     symbol_ctr: &mut Counter,
     symbol_table: &mut SymbolTable,
     diag: &mut Diagnostic,
@@ -167,7 +167,7 @@ fn populate_link_table<'a>(
                 );
                 dec_tables.type_table.push(ExpressionType::Error);
                 dec_tables.ref_table.push(statement);
-                diag.push(
+                diag.report(
                     statement.span,
                     SemanticError::UseBeforeDefinition(identifier.clone()),
                 );
@@ -189,7 +189,7 @@ fn populate_link_table<'a>(
                 && symbol.depth > SymbolTable::GLOBAL_SCOPE_DEPTH
             // to ensure we do not throw error on global defs
             {
-                diag.push(
+                diag.report(
                     statement.span,
                     SemanticError::AlreadyDefinedInScope(symbol.identifier.clone()),
                 );
@@ -238,7 +238,7 @@ fn populate_link_table<'a>(
                 && symbol.depth > SymbolTable::GLOBAL_SCOPE_DEPTH
             {
                 //
-                diag.push(
+                diag.report(
                     statement.span,
                     SemanticError::AlreadyDefinedInScope(symbol.identifier.clone()),
                 );
@@ -283,7 +283,7 @@ fn populate_link_table<'a>(
 
 fn pop_link_tab_exp(
     expression: &Expression,
-    dec_tables: &mut DecTables,
+    dec_tables: &mut DeclarationTables,
     symbol_ctr: &mut Counter,
     symbol_table: &mut SymbolTable,
     diag: &mut Diagnostic,
@@ -296,7 +296,7 @@ fn pop_link_tab_exp(
                 if let Some(symbol) = symbol_table.lookup(&id) {
                     dec_tables.link_table[expression.node_id] = symbol.symbol_id;
                 } else {
-                    diag.push(
+                    diag.report(
                         expression.span,
                         SemanticError::UseBeforeDefinition(id.clone()),
                     );
@@ -313,7 +313,7 @@ fn pop_link_tab_exp(
                 if let Some(symbol) = symbol_table.lookup(&id) {
                     dec_tables.link_table[expression.node_id] = symbol.symbol_id;
                 } else {
-                    diag.push(
+                    diag.report(
                         expression.span,
                         SemanticError::UseBeforeDefinition(id.clone()),
                     );
@@ -340,16 +340,16 @@ mod tests {
     use crate::diagnostics::{diagnostic::*, error::*};
     use crate::lexer::lexer::scan;
     use crate::lexer::token::BuiltInType;
-    use crate::parser::parse_state::ParseState;
+    use crate::parser::parse_state::ParsingState;
     use crate::parser::statement::generate_ast;
     #[test]
     fn test_link_tables() {
         let input = "int a; a = 15;";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
 
-        let tables: DecTables = get_dec_tables(&root, &mut diag, size);
+        let tables: DeclarationTables = get_dec_tables(&root, &mut diag, size);
 
         println!("{:?}", root);
         println!("{:?}", tables);
@@ -375,10 +375,10 @@ mod tests {
     fn test_scope_shadowing() {
         let input = "int a; { int a; a = 5; } a = 10;";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
 
-        let tables: DecTables = get_dec_tables(&root, &mut diag, size);
+        let tables: DeclarationTables = get_dec_tables(&root, &mut diag, size);
 
         if let StatementT::Root { statements } = &root.stype {
             let global_decl_id = statements[0].node_id;
@@ -411,7 +411,7 @@ mod tests {
     fn test_undeclared_variable() {
         let input = "{a = 5;int a = 4;}";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let (root, size) = generate_ast(&mut state).unwrap();
 
         // Depending on your implementation, this should return an Err
@@ -429,7 +429,7 @@ mod tests {
     fn test_semicolon_error() {
         let input = "{int a}";
         let mut diag = Diagnostic::new();
-        let mut state = ParseState::new(scan(input), &mut diag);
+        let mut state = ParsingState::new(scan(input), &mut diag);
         let (_, _) = generate_ast(&mut state).unwrap();
         assert!(diag.has_errors());
         let err = &diag.get_errors()[0];
