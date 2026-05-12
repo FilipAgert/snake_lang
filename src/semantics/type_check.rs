@@ -5,7 +5,7 @@ use crate::{
         expression::{Expression, ExpressionT, ValueExpression},
         statement::{ExpressionType, Statement, StatementT},
     },
-    semantics::semantic_analyser::DecTables,
+    semantics::link_stage::DecTables,
 };
 
 pub fn type_check_pass(node: &Statement, diag: &mut Diagnostic, dec_tables: &DecTables) {
@@ -267,7 +267,7 @@ mod tests {
     use crate::lexer::lexer::scan;
     use crate::parser::parse_state::ParseState;
     use crate::parser::statement::generate_ast;
-    use crate::semantics::semantic_analyser::get_dec_tables;
+    use crate::semantics::link_stage::get_dec_tables;
     #[test]
     fn test_link_tables_2() {
         let input = "{

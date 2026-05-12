@@ -6,18 +6,14 @@ use crate::diagnostics::diagnostic::Diagnostic;
 use crate::lexer::lexer::scan;
 use crate::parser::parse_state::ParseState;
 use crate::parser::statement::generate_ast;
-use crate::semantics::{
-    semantic_analyser::{DecTables, get_dec_tables},
-    type_check::type_check_pass,
-};
+use crate::semantics::semantic_analyser::semantic_analysis;
 use std::fs;
 use std::{env, process};
 fn run_compiler(input: &str) -> i32 {
     let mut diag = Diagnostic::new();
     let mut state = ParseState::new(scan(input), &mut diag);
     let (root, size) = generate_ast(&mut state).unwrap();
-    let tables: DecTables = get_dec_tables(&root, &mut diag, size);
-    type_check_pass(&root, &mut diag, &tables);
+    semantic_analysis(&root, size, &mut diag);
 
     if diag.has_errors() {
         println!("{} errors found: ", diag.get_errors().len());

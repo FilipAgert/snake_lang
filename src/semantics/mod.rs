@@ -1,2 +1,3 @@
+mod link_stage;
 pub mod semantic_analyser;
-pub mod type_check;
+mod type_check;
