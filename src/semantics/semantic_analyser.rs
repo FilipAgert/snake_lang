@@ -11,24 +11,6 @@ use crate::{
     },
 };
 
-#[derive(Clone, PartialEq, Debug)]
-pub enum ExpressionType {
-    Standard(BuiltInType),
-    Pointer(Box<ExpressionType>),
-    Custom(Box<str>), // custom datatype
-    Error,            // Compiler could not determine type.
-}
-
-impl From<BuiltInType> for ExpressionType {
-    fn from(value: BuiltInType) -> Self {
-        if BuiltInType::Error == value {
-            ExpressionType::Error
-        } else {
-            ExpressionType::Standard(value)
-        }
-    }
-}
-
 // need datastructures now. given a root expression, need to populate ALLnodes into tables.
 // we have symbol table. it is transient.
 struct Symbol {

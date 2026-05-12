@@ -1,11 +1,12 @@
 mod error;
 mod lexer;
 mod parser;
+mod semantics;
 use crate::lexer::lexer::scan;
 use crate::parser::diagnostic::Diagnostic;
 use crate::parser::parse_state::ParseState;
-use crate::parser::semantic_analyser::{DecTables, get_dec_tables, type_check_pass};
 use crate::parser::statement::generate_ast;
+use crate::semantics::semantic_analyser::{DecTables, get_dec_tables, type_check_pass};
 use std::fs;
 use std::{env, process};
 fn run_compiler(input: &str) -> i32 {

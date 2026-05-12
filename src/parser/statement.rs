@@ -2,7 +2,24 @@ use crate::error::StatementError;
 use crate::lexer::token::*;
 use crate::parser::expression::*;
 use crate::parser::parse_state::ParseState;
-use crate::parser::semantic_analyser::ExpressionType;
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum ExpressionType {
+    Standard(BuiltInType),
+    Pointer(Box<ExpressionType>),
+    Custom(Box<str>), // custom datatype
+    Error,            // Compiler could not determine type.
+}
+
+impl From<BuiltInType> for ExpressionType {
+    fn from(value: BuiltInType) -> Self {
+        if BuiltInType::Error == value {
+            ExpressionType::Error
+        } else {
+            ExpressionType::Standard(value)
+        }
+    }
+}
 #[derive(Debug, Clone)]
 
 pub enum StatementT {

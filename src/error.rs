@@ -1,5 +1,5 @@
 use crate::lexer::token::{Bracket, Keyword, Operator, Span, Symbol, TokenType};
-use crate::parser::semantic_analyser::ExpressionType;
+use crate::parser::statement::ExpressionType;
 use std::fmt;
 #[derive(Debug)]
 pub enum ErrorT {
