@@ -1,9 +1,9 @@
 [package]
-name = "c_compiler"
+name = "snake_compiler"
 version = "0.1.0"
 edition = "2024"
 authors = ["Filip Agert filip.agert@gmail.com"]
-description = "Basic c_compiler written in rust"
+description = "Snake lang compiler written in rust"
 
 [profile.dev]
 opt-level = 0
