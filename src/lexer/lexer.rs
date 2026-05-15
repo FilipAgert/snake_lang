@@ -33,47 +33,32 @@ pub fn scan(str: &str) -> Vec<Token> {
 
 fn seperate_string(str: &str) -> Vec<TokenStr> {
     let mut cursor = str.char_indices().peekable();
-    let mut strings: Vec<TokenStr> = Vec::new();
+    let mut tokens: Vec<TokenStr> = Vec::new();
     let mut curr_str: String = String::new();
     let mut curr_start = 0;
+
+    let mut tokenize = |s: String, start: usize, end: usize| {
+        if !s.is_empty() {
+            let span = Span { start, end };
+            let token = TokenStr::new(s, span);
+            tokens.push(token);
+        }
+    };
 
     while let Some((idx, c)) = cursor.next() {
         if c == '\n' {
             continue;
         }
 
-        if (c == ' ' || c == '\n') && !curr_str.is_empty() {
-            let span = Span {
-                start: curr_start,
-                end: idx,
-            };
-            let str_token = TokenStr::new(mem::take(&mut curr_str), span);
-            strings.push(str_token);
+        if c == ' ' {
+            tokenize(std::mem::take(&mut curr_str), curr_start, idx);
             curr_start = idx + 1;
         } else if SPECIAL_SYMBOLS.contains(c) {
-            if !curr_str.is_empty() {
-                let span = Span {
-                    start: curr_start,
-                    end: idx,
-                };
-                let str_token = TokenStr::new(mem::take(&mut curr_str), span);
-                strings.push(str_token);
-            }
-            let spec_char_span = Span {
-                start: idx,
-                end: idx + 1,
-            };
-            strings.push(TokenStr::new(c.to_string(), spec_char_span));
+            tokenize(std::mem::take(&mut curr_str), curr_start, idx);
+            tokenize(c.to_string(), idx, idx + 1);
             curr_start = idx + 1;
         } else if OPERATORS.contains(c) {
-            if !curr_str.is_empty() {
-                let span = Span {
-                    start: curr_start,
-                    end: idx,
-                };
-                let str_token = TokenStr::new(mem::take(&mut curr_str), span);
-                strings.push(str_token);
-            }
+            tokenize(std::mem::take(&mut curr_str), curr_start, idx);
             curr_str.push(c);
             let mut end = idx + 1;
             while let Some((idx, c)) = cursor.peek().copied()
@@ -83,27 +68,15 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
                 curr_str.push(c);
                 end = idx + 1;
             }
-            let spec_char_span = Span {
-                start: idx,
-                end: end,
-            };
-            strings.push(TokenStr::new(mem::take(&mut curr_str), spec_char_span));
+            tokenize(std::mem::take(&mut curr_str), curr_start, end);
             curr_start = idx + 1;
-        } else if c != ' ' {
+        } else {
             curr_str.push(c);
-        } else if c == ' ' {
-            curr_start = idx + 1;
         }
     }
-    if !curr_str.is_empty() {
-        let span = Span {
-            start: curr_start,
-            end: str.len(),
-        };
-        strings.push(TokenStr::new(curr_str, span));
-    }
+    tokenize(curr_str, curr_start, str.len());
 
-    strings
+    tokens
 }
 
 #[cfg(test)]
