@@ -39,6 +39,7 @@ fn seperate_string(str: &str) -> Vec<TokenStr> {
 
     while let Some((idx, c)) = cursor.next() {
         if c == '\n' {
+            curr_start = idx + 1;
             continue;
         }
 
@@ -113,21 +114,56 @@ mod tests {
 
     #[test]
     fn test_sep_strings() {
+        let input = "fn f(num: int);";
+        let result = seperate_string(input);
+        assert_eq!(result[0].string, "fn");
+        assert_eq!(result[0].span.start, 0);
+        assert_eq!(result[0].span.end, 2);
+        assert_eq!(result[1].string, "f");
+        assert_eq!(result[1].span.start, 3);
+        assert_eq!(result[1].span.end, 4);
+        assert_eq!(result[2].string, "(");
+        assert_eq!(result[2].span.start, 4);
+        assert_eq!(result[2].span.end, 5);
+        assert_eq!(result[3].string, "num");
+        assert_eq!(result[3].span.start, 5);
+        assert_eq!(result[3].span.end, 8);
+        assert_eq!(result[4].string, ":");
+        assert_eq!(result[4].span.start, 8);
+        assert_eq!(result[4].span.end, 9);
+        assert_eq!(result[5].string, "int");
+        assert_eq!(result[5].span.start, 10);
+        assert_eq!(result[5].span.end, 13);
+        assert_eq!(result[6].string, ")");
+        assert_eq!(result[6].span.start, 13);
+        assert_eq!(result[6].span.end, 14);
+        assert_eq!(result[7].string, ";");
+        assert_eq!(result[7].span.start, 14);
+        assert_eq!(result[7].span.end, 15);
+        for res in result {
+            println!("{:?}", res)
+        }
+    }
+
+    #[test]
+    fn test_sep_strings_with_indentation() {
+        let input = "int val = 4;\n    int x = f(4);";
+        let result = seperate_string(input);
+        assert_eq!(result[5].string, "int");
+        assert_eq!(result[5].span.start, 17);
+        assert_eq!(result[5].span.end, 20);
+        for res in result {
+            println!("{:?}", res)
+        }
+    }
+
+    #[test]
+    fn test_sep_strings_without_indentation() {
         let input = "int val = 4;\nint x = f(4);";
         let result = seperate_string(input);
-        assert_eq!(result[0].string, "int");
-        assert_eq!(result[1].string, "val");
-        assert_eq!(result[2].string, "=");
-        assert_eq!(result[3].string, "4");
-        assert_eq!(result[4].string, ";");
         assert_eq!(result[5].string, "int");
-        assert_eq!(result[6].string, "x");
-        assert_eq!(result[7].string, "=");
-        assert_eq!(result[8].string, "f");
-        assert_eq!(result[9].string, "(");
-        assert_eq!(result[10].string, "4");
-        assert_eq!(result[11].string, ")");
-        assert_eq!(result[12].string, ";");
+        assert_eq!(result[5].span.start, 13);
+        assert_eq!(result[5].span.end, 16);
         for res in result {
             println!("{:?}", res)
         }
