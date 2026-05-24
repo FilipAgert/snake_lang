@@ -432,13 +432,27 @@ mod tests {
         let mut state = ParsingState::new(scan(input), &mut diag);
         let (_, _) = generate_ast(&mut state).unwrap();
         assert!(diag.has_errors());
-        let err = &diag.get_errors()[0];
         diag.print_errors(input);
-        match &err.error_t {
-            ErrorT::StatementError(StatementError::ExpectedToken { .. }) => {
-                assert!(true)
-            }
-            _ => assert!(false),
-        }
+        let has_unexpected_brace_err = diag
+            .get_errors()
+            .iter()
+            .any(|err| {
+                matches!(
+                    &err.error_t,
+                    ErrorT::StatementError(StatementError::UnexpectedToken { .. })
+                )
+            });
+        let has_expected_semicolon_err = diag
+            .get_errors()
+            .iter()
+            .any(|err| {
+                matches!(
+                    &err.error_t,
+                    ErrorT::StatementError(StatementError::ExpectedToken { .. })
+                )
+            });
+
+        assert!(has_unexpected_brace_err);
+        assert!(has_expected_semicolon_err);
     }
 }
